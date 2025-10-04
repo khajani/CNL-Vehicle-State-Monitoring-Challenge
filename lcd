@@ -1,2 +1,4 @@
 #include <Grove-LCD RGB Backlight>
 #include <rgb_lcd.h> //control LCD backlight colour
+
+rgb_lcd lcd;
