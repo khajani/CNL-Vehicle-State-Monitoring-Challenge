@@ -12,41 +12,62 @@
  * @url https://github.com/DFRobot/DFRobot_BMX160
  */
 #include <DFRobot_BMX160.h>
+#include <Wire.h>
+#include <arduinoFFT.h>
 
-float magx = 0;
-float magy = 0;
-float magz = 0;
-float magn = 0;
+//FFT configuration
+#define SAMPLES 256
+#define SAMPLE_FREQ 400
+#define LED_PIN 13
+#define FREQ_THRESHOLD 200.0
 
-float home_magx = 160;
-float home_magy = -30;
-float home_magz = -620;
-float home_magn = 640;
+//magnetometer variables
+float magx = 0; float magy = 0; float magz = 0; float magn = 0;
+
+float home_magx = 160; float home_magy = -30; float home_magz = -620; float home_magn = 640;
 float mag_threshold = 20;
 
-float d_magx = 0;
-float d_magy = 0;
-float d_magz = 0;
-float d_magn = 0;
+float d_magx = 0; float d_magy = 0; float d_magz = 0; float d_magn = 0;
 
+
+//object inits
 DFRobot_BMX160 bmx160;
+
+//create buffers to store sensor data in memory
+float vReal[SAMPLES];   // Real part of signal (accelerometer samples)
+float vImag[SAMPLES];   // Imaginary part (all zeros for real input)
+/*fft uses real and imaginary component of inputted data; we don't have an imaginary
+component so thats just all zeroes*/
+
+//create fft object
+ArduinoFFT<float> FFT = ArduinoFFT<float>(vReal, vImag, SAMPLES, SAMPLE_FREQ);
+
+//baseline good condition spectrum
+float baselineSpectrum[SAMPLES/2];
+//uses samples/2 because half the data is a mirror or smth idk why vReal doesnt do this tbh lol
+bool baselineSet = false; //indicates if theres a basline set stored
+
 void setup(){
   Serial.begin(115200);
-  delay(20);
-  
-  Serial.println("MagX MagY MagZ MagN");
-
-
+  pinMode(LED_PIN, OUTPUT);
 
   //init the hardware bmx160  
   if (bmx160.begin() != true){
-    Serial.println("init false");
+    Serial.println("imu init false");
     while(1);
   }
+  Serial.println("imu initialized");
+
+  Serial.println("recording baseline");
+  recordBaseline(); //method to obtain baseline data set + put in buffer
+  Serial.println("baseline recorded");
+
+  //bunch of config stuff, keeping for potential later use
+
   //bmx160.setLowPower();   //disable the gyroscope and accelerometer sensor
   //bmx160.wakeUp();        //enable the gyroscope and accelerometer sensor
   //bmx160.softReset();     //reset the sensor
-  
+
   /** 
    * enum{eGyroRange_2000DPS,
    *       eGyroRange_1000DPS,
@@ -74,50 +95,117 @@ void loop(){
   /* Get a new sensor event */
   bmx160.getAllData(&Omagn, &Ogyro, &Oaccel);
 
-  //get magnetometer results
-  magx= Omagn.x;
-  magy = Omagn.y;
-  magz = Omagn.z;
-  magn = sqrt(sq(magx) + sq(magy) + sq(magz));
+  //MAGNETOMETER!!!
+    //get magnetometer results
+    magx= Omagn.x;
+    magy = Omagn.y;
+    magz = Omagn.z;
+    magn = sqrt(sq(magx) + sq(magy) + sq(magz));
 
-  d_magx = magx - home_magx;
-  d_magy = magy - home_magy;
-  d_magz = magz - home_magz;
-  d_magn = magn - home_magn;
+    d_magx = magx - home_magx;
+    d_magy = magy - home_magy;
+    d_magz = magz - home_magz;
+    d_magn = magn - home_magn;
 
-  /* Display the magnetometer results (magn is magnetometer in uTesla) */
- // Serial.print("M ");
-  // Serial.print("X: "); 
-  Serial.print(d_magx); Serial.print(" ");
-  // Serial.print("Y: "); 
-  Serial.print(d_magy); Serial.print(" ");
-  // Serial.print("Z: "); 
-  Serial.print(d_magz); Serial.print(" ");
+    /* Display the magnetometer results (magn is magnetometer in uTesla) */
+    // Serial.print(d_magx); Serial.print(" ");
+    // Serial.print(d_magy); Serial.print(" ");
+    // Serial.print(d_magz); Serial.print(" ");
+    // Serial.print(d_magn); Serial.print(" ");
 
-  Serial.print(d_magn); Serial.print(" ");
- // Serial.println("uT");
+  //GYROSCOPE!!
 
-
-
-  /* Display the gyroscope results (gyroscope data is in g) */
-  // Serial.print("G ");
-  // Serial.print("X: "); Serial.print(Ogyro.x); Serial.print("  ");
-  // Serial.print("Y: "); Serial.print(Ogyro.y); Serial.print("  ");
-  // Serial.print("Z: "); Serial.print(Ogyro.z); Serial.print("  ");
-  // Serial.println("g");
+    /* Display the gyroscope results (gyroscope data is in g) */
+    // Serial.print("G ");
+    // Serial.print("X: "); Serial.print(Ogyro.x); Serial.print("  ");
+    // Serial.print("Y: "); Serial.print(Ogyro.y); Serial.print("  ");
+    // Serial.print("Z: "); Serial.print(Ogyro.z); Serial.print("  ");
+    // Serial.println("g");
   
-  // // /* Display the accelerometer results (accelerometer data is in m/s^2) */
-  // // Serial.print("A ");
-  // // Serial.print("X: "); 
-  // Serial.print(Oaccel.x); Serial.print(" ");
-  // // Serial.print("Y: "); 
-  // Serial.print(Oaccel.y); Serial.print(" ");
-  // // Serial.print("Z: "); 
-  // Serial.print(Oaccel.z); Serial.print(" ");
-  // // Serial.println("m/s^2");
+  //ACCELEROMETER!!
 
-  Serial.println("");
+    /* Display the accelerometer results (accelerometer data is in m/s^2) */
+    Serial.print(Oaccel.x); Serial.print(" ");
+    Serial.print(Oaccel.y); Serial.print(" ");
+    Serial.print(Oaccel.z); Serial.print(" ");
 
-  delay(20);
+    //actual FFT code
+    collectSamples();
+    runFFT(); //method to analyze samples
+
+    double freq_diff //VAR FOR ACTUAL USAGE
+    = compareToBaseline(); //method to compare sample sets
+
+    //basic LED test; will be replaced with LCD code later
+    if (freq_diff > FREQ_THRESHOLD) {
+      digitalWrite(LED_PIN, HIGH); //light up LED if threshold exceeded
+    } else {
+      digitalWrite(LED_PIN, LOW);
+    }
+
+    delay(100); //change loop rate here
 }
+
+//method to 
+void collectSamples() {
+  //get time spacing for sample readings. unsigned long = large pos int
+  unsigned long microsPerSample = 1000000UL / SAMPLING_FREQUENCY;
+
+  //loop to take amount of samples
+  for (int i = 0; i < SAMPLES; i++) {
+    //get time since arduino started
+    unsigned long tStart = micros();
+
+    //set index in sample buffer to the norm accel reading
+    vReal[i] = sqrt((double)Oaccel.x*Oaccel.x + (double)Oaccel.y*Oaccel.y + (double)Oaccel.z*Oaccel.z);
+
+    vImag[i] = 0.0; //set index in imaginary buffer to 0, will fill with all 0s
+
+    //wait until next sample
+    while (micros() - tStart < microsPerSample);
+  }
+
+  //remove mean so that frequency oscillates around zero
+  double mean = 0.0;
+  for (int i = 0; i < SAMPLES; i++) mean += vReal[i];
+  mean /= SAMPLES;
+  for (int i = 0; i < SAMPLES; i++) vReal[i] -= mean;
+}
+
+void runFFT() {
+  //hamming fixes the issue that the data won't 'loop' perfectly in given sample time
+  FFT.windowing(FFTWindow::Hamming, FFTDirection::Forward); // apply Hamming window
+  FFT.compute(FFTDirection::Forward);                       // compute FFT
+  FFT.complexToMagnitude();                                  // convert to magnitudes
+}
+
+
+void recordBaseline() {
+  //get and convert samples
+  collectSamples();
+  runFFT();
+
+  //assign samples to the baseline spectrum matrix
+  for (int i = 0; i < SAMPLES/2; i++) {
+    baselineSpectrum[i] = vReal[i];
+  }
+  //say that baseline is now filled 
+  baselineSet = true;
+}
+
+//compare live set of data to baseline
+double compareToBaseline() {
+  double diff = 0.0;
+
+  //iterate through indices of live and baseline sets
+  for (int i = 0; i < SAMPLES/2; i++) {
+    //what is the difference between mag in each set?
+    double delta = vReal[i] - baselineSpectrum[i];
+    //add difference to overall difference. square penalizes larger differences more
+    diff += delta * delta;
+  }
+  return diff;
+}
+
+
 
