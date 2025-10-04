@@ -1,0 +1,110 @@
+#include <WiFiS3.h> // REQUIRED for Arduino Uno R4 WiFi networking
+#include <ThingSpeak.h> // REQUIRED for ThingSpeak functions
+#include <Adafruit_LIS3MDL.h> // Magnetometer Library
+#include <Adafruit_Sensor.h>  // Unified Sensor Library
+
+char ssid[] = "Kj’s iPhone"; // <-- Your working SSID
+char pass[] = "1236393639";     // <-- Your working Password
+
+// ThingSpeak Channel and API Key
+unsigned long myChannelNumber = 3100192;          // Your ThingSpeak Channel ID
+const char * myWriteAPIKey = "BAOHBAPAYCW24D6P"; // <-- Your Write API Key
+
+// -------------------------------------------------------------------
+// GLOBAL VARIABLES
+// -------------------------------------------------------------------
+WiFiClient client;
+int status = WL_IDLE_STATUS;
+Adafruit_LIS3MDL lis3mdl; // Magnetometer object
+
+// -------------------------------------------------------------------
+// FUNCTION: connectToWiFi
+void connectToWiFi() {
+  // Check for the WiFi module
+  if (WiFi.status() == WL_NO_MODULE) {
+    Serial.println("Communication with WiFi module failed! Halting.");
+    while (true); 
+  }
+
+  // Attempt to connect to WiFi network
+  while (status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to SSID: ");
+    Serial.println(ssid);
+    status = WiFi.begin(ssid, pass);
+    
+    // Wait 10 seconds for connection
+    delay(10000);
+  }
+
+  // Connection successful
+  Serial.println("\n✅ Connected to WiFi!");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+}
+
+// -------------------------------------------------------------------
+// SETUP FUNCTION
+void setup() {
+  Serial.begin(9600);
+  delay(100);
+
+  connectToWiFi();
+
+  // Initialize ThingSpeak client
+  ThingSpeak.begin(client);
+
+  // --- MAGNETOMETER SETUP ---
+  Serial.print("Initializing LIS3MDL...");
+  if (!lis3mdl.begin_I2C()) {
+    Serial.println("...FAILED! Check wiring/address. Halting.");
+    while (1) delay(10);
+  }
+  lis3mdl.setOperationMode(LIS3MDL_MEDIUMMODE); // Set to a moderate sample rate
+  Serial.println("...SUCCESS!");
+}
+
+// -------------------------------------------------------------------
+// MAIN LOOP FUNCTION
+void loop() {
+  // Check Wi-Fi connection and attempt to reconnect if needed
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Lost WiFi connection. Reconnecting...");
+    connectToWiFi();
+  }
+  
+  // --- MAGNETOMETER READ ---
+  sensors_event_t event;
+  lis3mdl.getEvent(&event);
+  
+  // --- SENSOR DATA VARIABLES ---
+  float mag_x = event.magnetic.x;     // Field 1: Magnetometer X
+  float mag_y = event.magnetic.y;     // Field 2: Magnetometer Y
+  float mag_z = event.magnetic.z;     // Field 3: Magnetometer Z
+  float empty_field_4 = 0;            // Field 4: Placeholder for future sensor
+  float empty_field_5 = 0;            // Field 5: Placeholder for future sensor
+
+  // --- Print to Serial ---
+  Serial.println("\n--- Sensor Readings (Magnetometer) ---");
+  Serial.print("F1 (Mag X): "); Serial.println(mag_x);
+  Serial.print("F2 (Mag Y): "); Serial.println(mag_y);
+  Serial.print("F3 (Mag Z): "); Serial.println(mag_z);
+  
+  // --- SET UP FIELDS ---
+  ThingSpeak.setField(1, mag_x);
+  ThingSpeak.setField(2, mag_y);
+  ThingSpeak.setField(3, mag_z);
+  ThingSpeak.setField(4, empty_field_4); // Will be replaced by Accelerometer/Gyro
+  ThingSpeak.setField(5, empty_field_5); // Will be replaced by Temp/Humidity
+  
+  // --- WRITE DATA TO THINGSPEAK ---
+  int http_response_code = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
+
+  if (http_response_code == 200) {
+    Serial.println("✅ Data sent successfully! (HTTP 200)");
+  } else {
+    Serial.print("❌ Problem updating channel. HTTP error code: ");
+    Serial.println(http_response_code);
+  }
+
+  delay(20000); 
+}
