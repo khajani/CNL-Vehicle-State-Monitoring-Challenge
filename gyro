@@ -8,7 +8,6 @@ MPU6050 mpu;
 
 const float warningAngle=50;
 const float criticalAngle=80;
-const int ALERT_PIN = 4;
 
 void setup() {
   Serial.begin(9600);
