@@ -47,7 +47,7 @@ void connectToWiFi() {
 // SETUP FUNCTION
 // -------------------------------------------------------------------
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   delay(100);
 
   connectToWiFi();
