@@ -1,100 +1,109 @@
-#include <WiFi.h> // Replace with your specific library if needed
-#include <HTTPClient.h> // For sending data to a server
+#include <WiFiS3.h> // REQUIRED for Arduino Uno R4 WiFi networking
+#include <ThingSpeak.h> // REQUIRED for ThingSpeak functions
 
-// Your network credentials (for testing)
-const char* ssid = "YourSSID";
-const char* password = "YourPassword";
+// -------------------------------------------------------------------
+// 1. YOUR PRIVATE CREDENTIALS (REPLACE THE PLACEHOLDER VALUES BELOW)
+// -------------------------------------------------------------------
+char ssid[] = "Kj's iPhone"; // <-- CHANGE THIS
+char pass[] = "1236393639";     // <-- CHANGE THIS
 
-// Server endpoint to send data (replace with a real server for demo)
-const char* serverName = "http://your-cnl-server.com/api/data"; 
+// ThingSpeak Channel and API Key
+unsigned long myChannelNumber = 3100192;          // Your ThingSpeak Channel ID (e.g., 123456) <-- CHANGE THIS
+const char * myWriteAPIKey = UCC3VTI2I10FKA4G; // <-- CHANGE THIS
 
-// Last successful transmission time
-unsigned long lastTransmitTime = 0;
-const long nominalInterval = 300000; // 5 minutes in ms
+// -------------------------------------------------------------------
+// GLOBAL VARIABLES
+// -------------------------------------------------------------------
+WiFiClient client;
+int status = WL_IDLE_STATUS;
 
-// Wi-Fi Setup
-  WiFi.begin(ssid, password);
-  lcd.setRGB(0, 0, 255); // Blue for connecting
-  lcd.clear();
-  lcd.print("Connecting to WiFi...");
-  
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    lcd.print(".");
-    Serial.print(".");
+// -------------------------------------------------------------------
+// FUNCTION: connectToWiFi
+// -------------------------------------------------------------------
+void connectToWiFi() {
+  // Check for the WiFi module
+  if (WiFi.status() == WL_NO_MODULE) {
+    Serial.println("Communication with WiFi module failed! Halting.");
+    while (true); 
   }
-  
-  lcd.clear();
-  lcd.print("WiFi CONNECTED!");
-  lcd.setCursor(0, 1);
-  lcd.print(WiFi.localIP());
-  delay(2000);
-  lcd.setRGB(0, 255, 0); // Return to Green
 
-// Function to format and send data over HTTP POST
-void transmitData(int score, String anomaly, float gForce, float temp) {
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
+  // Attempt to connect to WiFi network
+  while (status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to SSID: ");
+    Serial.println(ssid);
+    status = WiFi.begin(ssid, pass);
     
-    // Construct the data payload (JSON is best practice)
-    String jsonPayload = "{\"score\":" + String(score) + 
-                         ",\"anomaly\":\"" + anomaly + 
-                         "\",\"gForce\":" + String(gForce) + 
-                         ",\"temp\":" + String(temp) + "}";
-    
-    http.begin(serverName); 
-    http.addHeader("Content-Type", "application/json");
-
-    int httpCode = http.POST(jsonPayload);
-    
-    if (httpCode > 0) {
-      // Success
-      Serial.print("HTTP Success: ");
-      Serial.println(httpCode);
-      lastTransmitTime = millis(); // Update last success time
-    } else {
-      // Error
-      Serial.print("HTTP Error: ");
-      Serial.println(httpCode);
-    }
-    
-    http.end();
+    // Wait 10 seconds for connection
+    delay(10000);
   }
+
+  // Connection successful
+  Serial.println("\n✅ Connected to WiFi!");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
 }
 
-// ----------------------------------------------------------------
-// --- 5. REMOTE COMMUNICATION IN LOOP ---
-// ----------------------------------------------------------------
-void checkAndTransmit() {
-    float gForce = readIMU_GForce(); // Re-read or use global vars
-    float internalTemp = readAHT20_Temp();
+// -------------------------------------------------------------------
+// SETUP FUNCTION
+// -------------------------------------------------------------------
+void setup() {
+  Serial.begin(9600);
+  delay(100);
 
-    // High Priority: CRITICAL/WARNING state
-    if (currentThreatScore >= THREAT_LEVEL_WARNING) {
-        // In a CRITICAL state, push data frequently
-        if (millis() - lastTransmitTime > 2000) { // Send every 2 seconds
-             transmitData(currentThreatScore, primaryAnomaly, gForce, internalTemp);
-        }
-    }
-    // Low Priority: NOMINAL state (only push after a long interval)
-    else if (millis() - lastTransmitTime > nominalInterval) {
-        transmitData(currentThreatScore, primaryAnomaly, gForce, internalTemp);
-    }
+  connectToWiFi();
+
+  // Initialize ThingSpeak client
+  ThingSpeak.begin(client);
 }
 
+// -------------------------------------------------------------------
+// MAIN LOOP FUNCTION
+// -------------------------------------------------------------------
 void loop() {
-  // 1. READ ALL SENSORS
-  // ... (existing code)
+  // Check Wi-Fi connection and attempt to reconnect if needed
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Lost WiFi connection. Reconnecting...");
+    connectToWiFi();
+  }
+  
+  // --- SENSOR DATA VARIABLES (Simulated for this test) ---
+  float score;        // Field 1
+  float gForce;       // Field 2
+  float temperature;  // Field 3
+  float latitude;     // Field 4
+  float longitude;    // Field 5
+  
+  // *** SIMULATED DATA ***
+  score       = random(50, 101);             
+  gForce      = random(90, 110) / 100.0;     
+  temperature = random(1500, 3500) / 100.0;  
+  latitude    = random(434000, 434500) / 10000.0;
+  longitude   = random(-805500, -805000) / 10000.0; 
+  
+  
+  Serial.println("\n--- Sensor Readings (Simulated) ---");
+  Serial.print("F1 (Score): "); Serial.println(score);
+  Serial.print("F2 (G-Force): "); Serial.println(gForce);
+  Serial.print("F3 (Temp): "); Serial.print(temperature); Serial.println(" C");
+  Serial.print("F4 (Lat): "); Serial.println(latitude, 4);
+  Serial.print("F5 (Long): "); Serial.println(longitude, 4);
+  
+  // --- SET UP FIELDS ---
+  ThingSpeak.setField(1, score);
+  ThingSpeak.setField(2, gForce);
+  ThingSpeak.setField(3, temperature);
+  ThingSpeak.setField(4, latitude);
+  ThingSpeak.setField(5, longitude);
+  
+  // --- WRITE DATA TO THINGSPEAK ---
+  int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
 
-  // 2. RUN AUTONOMOUS THREAT LEVEL ASSESSMENT (ATLA)
-  // ... (existing code)
+  if (x == 200) {
+    Serial.println("✅ Data sent successfully! (HTTP 200)");
+  } else {
+    Serial.print("❌ Problem updating channel. HTTP error code: ");
+    Serial.println(x);
+  }
 
-  // 3. UPDATE DRIVER INTERFACE (LCD and Buzzer)
-  updateDriverInterface();
-
-  // 4. REMOTE COMMUNICATION (NEW)
-  checkAndTransmit();
-
-  // Sample Rate: Check sensors every 500 milliseconds
-  delay(500); 
+  delay(20000); 
 }
