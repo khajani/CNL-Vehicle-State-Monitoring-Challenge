@@ -15,25 +15,25 @@ struct TestState {
   int duration;           // Duration of the state in ms
 };
 
-// **TEXT HAS BEEN OPTIMIZED TO FIT 16 CHARACTERS PER LINE**
+// **TEXT HAS BEEN FINALIZED TO EXACTLY 16 CHARACTERS OR LESS**
 TestState states[] = {
   // State 0: Initializing (Blue)
-  {"--NODE INITIATE--", "LOADING DECISIONS", 2000},
+  {"--NODE INIT--", "LOADING DECISIONS", 2000}, // 13 & 16 chars
 
-  // State 1: Radiation Leak Instruction
-  {"!!!RAD LEAK!!!", "SEEK SHELTER WAIT", 3000},
+  // State 1: Radiation Leak Instruction (Critical)
+  {"!!!RAD LEAK!!!", "SEEK SHELTER/WAIT", 3000}, // 14 & 16 chars
 
-  // State 2: Fire/Overheat Instruction
-  {"!!!FIRE/HEAT!!!", "PULL OVER EXTING.", 3000},
+  // State 2: Fire/Overheat Instruction (Critical)
+  {"!!!FIRE/HEAT!!!", "PULL OVER/EXTING", 3000}, // 15 & 16 chars
   
-  // State 3: Crash/Impact Instruction
-  {"!!!CRASH!!!", "STAY SAFE CALL CNL", 3000},
+  // State 3: Crash/Impact Instruction (Critical)
+  {"!!!CRASH!!!", "SAFE & CALL CNL", 3000}, // 11 & 15 chars
   
   // State 4: Load Shift/Other Generic Warning
-  {"LOAD SHIFT LOOSE", "PULL OVER INSPECT", 3000},
+  {"LOAD SHIFT LOOSE", "PULL OVER/INSPCT", 3000}, // 16 & 16 chars
   
   // State 5: NOMINAL (Rest State)
-  {"SYSTEM NOMINAL", "ALL SYSTEMS GREEN", 3000},
+  {"SYSTEM NOMINAL", "ALL SYSTEMS OK", 3000}, // 14 & 14 chars
 };
 
 const int numStates = sizeof(states) / sizeof(states[0]);
@@ -50,10 +50,6 @@ void setup() {
   // LCD Setup
   lcd.begin(16, 2);
   
-  // Buzzer Setup - COMMENTED OUT
-  // pinMode(BUZZER_PIN, OUTPUT);
-  // digitalWrite(BUZZER_PIN, LOW); 
-  
   stateStartTime = millis();
 }
 
@@ -66,13 +62,11 @@ void loop() {
   
   // --- A. State Transition Logic ---
   if (currentTime - stateStartTime >= current.duration) {
-    // digitalWrite(BUZZER_PIN, LOW); // Buzzer code disabled
     currentState = (currentState + 1) % numStates; 
     stateStartTime = currentTime;
     
     // Force text update on new state
     lcd.clear();
-    lcd.home();
   }
   
   // Update the current state after transition
@@ -95,9 +89,6 @@ void loop() {
     // Line 2: ACTIONABLE INSTRUCTION (Optimized Text)
     lcd.setCursor(0, 1);
     lcd.print(current.instruction);
-
-    // Continuous Buzzer Tone for Critical Alerts - COMMENTED OUT
-    // digitalWrite(BUZZER_PIN, HIGH);
     
   } else {
     // NOMINAL/Initial States
@@ -109,7 +100,6 @@ void loop() {
     lcd.setCursor(0, 1);
     lcd.print(current.instruction);
 
-    // digitalWrite(BUZZER_PIN, LOW); // Buzzer code disabled
     delay(50); // Small delay for stability
   }
 }
