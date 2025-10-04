@@ -1,4 +1,4 @@
-// GLOBAL LIBRARIES
+// GLOBAL LIBRARIES 
 #include <WiFiS3.h>      // REQUIRED for Arduino Uno R4 WiFi networking
 #include <ThingSpeak.h>  // REQUIRED for ThingSpeak functions
 #include <Adafruit_LIS3MDL.h> // Magnetometer Library
@@ -6,16 +6,16 @@
 #include <Wire.h>        // REQUIRED for I2C (LCD and Mag)
 #include <rgb_lcd.h>     // REQUIRED for LCD
 
-// -------------------- 1. YOUR PRIVATE CREDENTIALS --------------------
+// YOUR PRIVATE CREDENTIALS 
 char ssid[] = "Kj’s iPhone"; 
 char pass[] = "1236393639";
 
 // ThingSpeak Channel and API Key
 unsigned long myChannelNumber = 3100192;
 const char * myWriteAPIKey = "BAOHBAPAYCW24D6P"; 
-const float DECLINATION_ANGLE = 12.5; // <<-- IMPORTANT: CHANGE THIS TO YOUR LOCATION'S VALUE!
+const float DECLINATION_ANGLE = 12.5; // <<-- IMPORTANT: CHANGE THIS TO YOUR LOCATION'S ACC VALUE!
 
-// GLOBAL VARIABLES 
+// GLOBAL VARIABLES
 WiFiClient client;
 int status = WL_IDLE_STATUS;
 
@@ -30,75 +30,98 @@ struct TestState {
 };
 
 // **TEXT 16 CHARACTERS OR LESS**
+// MAPPING: currentState to the array index (1-5)
 TestState states[] = {
-  // State 0: Initializing (Blue)
-  {"--NODE INIT DONE--", "LOADING DECISIONS"}, 
-  // State 1: Radiation Leak Instruction (Red)
+  // Index 0: Initializing (Blue)
+  {"--INIT DONE--", "LOADING DECISIONS"}, 
+  // Index 1: Radiation Leak Instruction (CRITICAL - Red Flash)
   {"RAD. LEAK! STOP!", "SHELTER ASAP"}, 
-  // State 2: Fire/Overheat Instruction (Red)
+  // Index 2: Fire/Overheat Instruction (CRITICAL - Red Flash)
   {"FIRE! CONTAIN!", "PULL OVER"},
-  // State 3: Crash/Impact Instruction (Red)
+  // Index 3: Crash/Impact Instruction (CRITICAL - Red Flash)
   {"CRASH! DANGER!", "STOP, CALL CNL"},
-  // State 4: Load Shift/Other Generic Warning (Red)
+  // Index 4: Load Shift/Other Generic Warning (CRITICAL - Red Flash)
   {"LOAD SHIFTED", "STOP INSPECT"},
-  // State 5: NOMINAL (Green)
+  // Index 5: NOMINAL (Green)
   {"SYSTEM NEUTRAL", "ALL SYSTEMS OK"},
 };
 
 const int numStates = sizeof(states) / sizeof(states[0]);
 int currentState = 0; // Starts in State 0 (Initializing)
-unsigned long lcdFlashTime;
 const int flashRate = 200; // milliseconds for the LCD flash cycle
 
+// FUNCTION: determineAnomalyState 
+// This function determines the current alert state based on sensor readings
+// The priority is: Radiation > Crash > Fire > Load Shift > Neutral
+// MUST replace the placeholder variables (temp, gForce, score) w/ acc values
+int determineAnomalyState(float temp_C, float gForce_G, float rad_score) {
+  
+  // PLACEHOLDER THRESHOLDS (ADJUST THESE LATER)
+  const float HIGH_RADIATION_THRESHOLD = 500.0; // Assume 500+ is a critical leak
+  const float HIGH_G_FORCE_THRESHOLD   = 2.5;   // Assume 2.5G+ is a crash
+  const float OVERHEAT_TEMP_THRESHOLD  = 80.0;  // Assume 80C+ is fire/overheat
+  const float LOAD_SHIFT_SCORE         = 100.0; // Assume a calculated score of 100+ is load shift
+  
+  // 1. RADIATION LEAK (Highest Priority) -> State 1
+  if (rad_score >= HIGH_RADIATION_THRESHOLD) {
+    return 1; 
+  }
 
-// -------------------- FUNCTION: connectToWiFi --------------------
+  // 2. CRASH/IMPACT (High Priority) -> State 3
+  if (gForce_G >= HIGH_G_FORCE_THRESHOLD) {
+    return 3;
+  }
+  
+  // 3. FIRE/OVERHEAT -> State 2
+  if (temp_C >= OVERHEAT_TEMP_THRESHOLD) {
+    return 2; 
+  }
+  
+  // 4. LOAD SHIFT/GENERIC WARNING -> State 4
+  // NOTE: This usually comes from a complex fusion score (Field 1)
+  if (rad_score >= LOAD_SHIFT_SCORE) { 
+    return 4;
+  }
+
+  // 5. NOMINAL (Lowest Priority) -> State 5
+  return 5;
+}
+
+
+// FUNCTION: connectToWiFi (Same as before) 
 void connectToWiFi() {
   if (WiFi.status() == WL_NO_MODULE) {
-    Serial.println("Communication with WiFi module failed! Halting.");
-    // Display error on LCD
-    lcd.setRGB(255, 0, 0); 
-    lcd.home(); lcd.print("WIFI MODULE FAIL");
+    // ... error logic ...
+    lcd.setRGB(255, 0, 0); lcd.home(); lcd.print("WIFI MODULE FAIL");
     while (true); 
   }
 
   while (status != WL_CONNECTED) {
     Serial.print("Attempting to connect to SSID: ");
     Serial.println(ssid);
-    
-    // Display connection attempt on LCD
-    lcd.setRGB(100, 100, 255); // Blue
-    lcd.home(); lcd.print("CONNECTING WIFI");
+    lcd.setRGB(100, 100, 255); lcd.home(); lcd.print("CONNECTING WIFI");
     lcd.setCursor(0, 1); lcd.print(ssid);
 
     status = WiFi.begin(ssid, pass);
     delay(10000);
   }
 
-  // Connection successful
   Serial.println("\n✅ Connected to WiFi!");
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.localIP());
 }
 
-// -------------------- SETUP FUNCTION --------------------
+// SETUP FUNCTION (Same as before) 
 void setup() {
-  // Update Serial Baud to match Wi-Fi/ThingSpeak
   Serial.begin(115200); 
   delay(100);
 
-  // --- LCD SETUP ---
   lcd.begin(16, 2);
-  
-  // Display initial state 0 (Initializing)
-  lcd.setRGB(100, 100, 255); // Blue
+  lcd.setRGB(100, 100, 255); 
   lcd.home(); lcd.print(states[0].anomaly);
   lcd.setCursor(0, 1); lcd.print(states[0].instruction);
 
-  // --- WIFI/THINGSPEAK SETUP ---
   connectToWiFi();
   ThingSpeak.begin(client);
 
-  // --- MAGNETOMETER SETUP ---
   Serial.print("Initializing LIS3MDL...");
   if (!lis3mdl.begin_I2C()) {
     Serial.println("...FAILED! Check wiring/address. Halting.");
@@ -108,49 +131,48 @@ void setup() {
   lis3mdl.setOperationMode(LIS3MDL_MEDIUMMODE);
   Serial.println("...SUCCESS!");
 
-  // Transition from State 0 (Init) to State 5 (Nominal) after successful setup
-  currentState = 5; 
+  currentState = 5; // Start in State 5 (Nominal) after successful setup
 }
 
-// -------------------- MAIN LOOP FUNCTION --------------------
+// MAIN LOOP FUNCTION 
 void loop() {
   unsigned long currentTime = millis();
   
-  // Check Wi-Fi connection and attempt to reconnect if needed
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("Lost WiFi connection. Reconnecting...");
     connectToWiFi();
   }
   
-  // -------------------- A. SENSOR READS --------------------
+  // SENSOR READS 
   sensors_event_t event;
   lis3mdl.getEvent(&event);
   
-  // --- RAW MAGNETOMETER DATA ---
+  // RAW MAGNETOMETER DATA 
   float mag_x = event.magnetic.x; // Value for Field 6
   float mag_y = event.magnetic.y; // Value for Field 7
   
-  // --- TRUE HEADING CALCULATION (for Field 8) ---
+  // PLACEHOLDER SENSOR READS (REPLACE THESE LINES LATER!) ---
+  // These must be replaced with your team's actual functions.
+  float rad_anomaly_score = 45.0; // Placeholder for Field 1 (Score)
+  float gForce_in_G       = 1.05; // Placeholder for Field 2 (gforce)
+  float temperature_C     = 25.0; // Placeholder for Field 3 (temp)
+  float latitude_value    = 43.41; // Placeholder for Field 4 (latitude)
+  float longitude_value   = -80.52; // Placeholder for Field 5 (longitude)
+  
+  // TRUE HEADING CALCULATION (for Field 8) ---
   float raw_heading = atan2(mag_y, mag_x) * 180.0 / PI;
   float true_heading = raw_heading + DECLINATION_ANGLE;
   if (true_heading < 0) {
     true_heading += 360;
   }
 
-  // -------------------- B. STATE DETERMINATION (You will replace this) --------------------
-  // IMPORTANT: For now, the state is fixed at 5 (NOMINAL) after setup.
-  // You will replace this section with your logic based on gForce, temp, etc.
-  // Example: if (gForce > 2.0) { currentState = 3; }
-  // You might change currentState from 5 to 1, 2, 3, or 4 based on sensor data.
-  // We keep it at 5 for this test.
-  if (currentState > 5) {
-    currentState = 5; 
-  }
-
-  // -------------------- C. LCD DISPLAY LOGIC --------------------
+  // STATE DETERMINATION 
+  currentState = determineAnomalyState(temperature_C, gForce_in_G, rad_anomaly_score);
+  
+  // LCD DISPLAY LOGIC 
   TestState current = states[currentState];
 
-  // If NOT NOMINAL (State 1 through 4) - Flashing RED
+  // If NOT NEUTRAL (State 1 through 4) - Flashing RED
   if (currentState >= 1 && currentState <= 4) {
     if (currentTime % flashRate < (flashRate / 2)) {  
         lcd.setRGB(255, 0, 0); // Red
@@ -158,7 +180,7 @@ void loop() {
         lcd.setRGB(0, 0, 0); // Off 
     }
   } 
-  // If NOMINAL (State 5) - Fixed GREEN
+  // If NEUTRAL (State 5) - Fixed GREEN
   else if (currentState == 5) {
     lcd.setRGB(0, 255, 0); // Green
   }
@@ -169,35 +191,30 @@ void loop() {
   lcd.setCursor(0, 1);
   lcd.print(current.instruction);
   
-  // -------------------- D. THINGSPEAK SEND --------------------
+  // THINGSPEAK CONNECTION
   
-  // --- MAIN PROJECT FIELDS (Sending 0 for now) ---
-  float score = 0;          // Field 1
-  float gForce = 0;         // Field 2
-  float temperature = 0;    // Field 3
-  float latitude = 0;       // Field 4
-  float longitude = 0;      // Field 5
-
-  // --- SET UP FIELDS ---
-  ThingSpeak.setField(1, score);
-  ThingSpeak.setField(2, gForce);
-  ThingSpeak.setField(3, temperature);
-  ThingSpeak.setField(4, latitude);
-  ThingSpeak.setField(5, longitude);
+  // SET UP FIELDS 
+  // Core Project Fields (Now using placeholders)
+  ThingSpeak.setField(1, rad_anomaly_score); // Field 1: Score
+  ThingSpeak.setField(2, gForce_in_G);       // Field 2: gforce
+  ThingSpeak.setField(3, temperature_C);      // Field 3: temp
+  ThingSpeak.setField(4, latitude_value);    // Field 4: latitude
+  ThingSpeak.setField(5, longitude_value);   // Field 5: longitude
   
   // MAGNETOMETER AND HEADING FIELDS
   ThingSpeak.setField(6, mag_x);
   ThingSpeak.setField(7, mag_y);
-  ThingSpeak.setField(8, true_heading); // Field 8 now sends True Heading
+  ThingSpeak.setField(8, true_heading); // Field 8: True Heading
   
-  // --- Print to Serial ---
+  // Print to Serial
   Serial.println("\n--- Sensor Readings ---");
-  Serial.print("Current State: "); Serial.println(currentState);
-  Serial.print("F6 (Mag X): "); Serial.println(mag_x);
-  Serial.print("F7 (Mag Y): "); Serial.println(mag_y);
+  Serial.print("Current State: "); Serial.print(currentState); Serial.print(" - "); Serial.println(current.anomaly);
+  Serial.print("F1 (Score): "); Serial.println(rad_anomaly_score);
+  Serial.print("F2 (gForce): "); Serial.println(gForce_in_G);
+  Serial.print("F3 (Temp): "); Serial.println(temperature_C);
   Serial.print("F8 (Heading): "); Serial.println(true_heading);
   
-  // --- WRITE DATA TO THINGSPEAK ---
+  // WRITE DATA TO THINGSPEAK 
   int http_response_code = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
 
   if (http_response_code == 200) {
