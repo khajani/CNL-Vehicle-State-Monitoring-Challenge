@@ -9,7 +9,8 @@ void setup() {
   Display.backlight();
 
   // Start the temperature/humidity sensor
-  Environment.begin();
+Environment.setPin(6)  
+Environment.begin();
 }
 
 void loop() {
