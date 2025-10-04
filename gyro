@@ -1,1 +1,53 @@
+//Libraries
+#include <Wire.h>
+#include "MPU6050.h"
 
+//include pin connections
+
+MPU6050 mpu;
+
+const float warningAngle=50;
+const float criticalAngle=80;
+
+void setup() {
+  Serial.begin(9600);
+  Wire.begin();
+
+  Serial.println("Initializing MPU6050...");
+  mpu.initialize();
+
+  if (!mpu.testConnection()) {
+    Serial.println("MPU6050 connection failed!");
+    while (1);
+  }
+  Serial.println("MPU6050 ready.");
+}
+
+void loop() {
+  //Sensor Values
+  int16_t ax, ay, az;
+  int16_t gx, gy, gz;
+  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+// Calculate accelerations (convert to g)
+  float accelX = ax / 16384.0; // scale for ±2g
+  float accelY = ay / 16384.0;
+  float accelZ = az / 16384.0;
+
+// Convert to roll & pitch angles (degrees)
+  float roll  = atan2(accelY, accelZ) * 180 / PI; //tilt around x-axis
+  float pitch = atan2(-accelX, sqrt(accelY * accelY + accelZ * accelZ)) * 180 / PI; //tilt round y-axis
+
+  float angleTilt= max(abs(roll), abs(pitch));
+
+  if(angleTilt>=criticalAngle){
+    Serial.println("CRITICAL TILT WARNING");
+  } else if(angleTilt>=warningAngle){
+    Serial.println("WARNING: TILT DETECTED");  
+  } else{
+    Serial.println("Normal operation");
+  }
+
+  delay(200);
+
+//its angle 50-80 is warning, and 80+ is critical warning
