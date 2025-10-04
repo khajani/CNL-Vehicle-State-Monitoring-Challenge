@@ -18,12 +18,23 @@ float magy = 0;
 float magz = 0;
 float magn = 0;
 
+float home_magx = 160;
+float home_magy = -30;
+float home_magz = -620;
+float home_magn = 640;
+float mag_threshold = 20;
+
+float d_magx = 0;
+float d_magy = 0;
+float d_magz = 0;
+float d_magn = 0;
+
 DFRobot_BMX160 bmx160;
 void setup(){
   Serial.begin(115200);
   delay(20);
   
-  Serial.println("MagX MagY MagZ");
+  Serial.println("MagX MagY MagZ MagN");
 
 
 
@@ -69,16 +80,21 @@ void loop(){
   magz = Omagn.z;
   magn = sqrt(sq(magx) + sq(magy) + sq(magz));
 
+  d_magx = magx - home_magx;
+  d_magy = magy - home_magy;
+  d_magz = magz - home_magz;
+  d_magn = magn - home_magn;
+
   /* Display the magnetometer results (magn is magnetometer in uTesla) */
  // Serial.print("M ");
   // Serial.print("X: "); 
-  Serial.print(magx); Serial.print(" ");
+  Serial.print(d_magx); Serial.print(" ");
   // Serial.print("Y: "); 
-  Serial.print(magy); Serial.print(" ");
+  Serial.print(d_magy); Serial.print(" ");
   // Serial.print("Z: "); 
-  Serial.print(magz); Serial.print(" ");
+  Serial.print(d_magz); Serial.print(" ");
 
-  Serial.print(magn); Serial.print(" ");
+  Serial.print(d_magn); Serial.print(" ");
  // Serial.println("uT");
 
 
