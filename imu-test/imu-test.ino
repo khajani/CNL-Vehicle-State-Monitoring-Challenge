@@ -147,7 +147,7 @@ void loop(){
     static double smooth_diff = 0;  // remembers previous value
     smooth_diff = alpha * freq_diff + (1 - alpha) * smooth_diff;
 
-
+    Serial.print(" ");
     Serial.println(freq_diff);
 
     //basic LED test; will be replaced with LCD code later
