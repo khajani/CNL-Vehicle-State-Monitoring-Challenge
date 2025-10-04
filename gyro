@@ -2,12 +2,13 @@
 #include <Wire.h>
 #include "MPU6050.h"
 
-//include pin connections
+//include pin connections define to pin d4
 
 MPU6050 mpu;
 
 const float warningAngle=50;
 const float criticalAngle=80;
+const int ALERT_PIN = 4;
 
 void setup() {
   Serial.begin(9600);
@@ -47,6 +48,7 @@ void loop() {
   } else{
     Serial.println("Normal operation");
   }
+//add which direction its tilting??
 
   delay(200);
 
