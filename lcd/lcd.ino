@@ -5,59 +5,98 @@
 // --- 2. PIN DEFINITIONS ---
 rgb_lcd lcd;
 
-// --- 3. LONG TEXT DEFINITIONS ---
-// LONGER text that requires two frames (max 32 chars total)
-const char* LONG_ANOMALY = "!!!RADIATION LEAK DETECTED!!!"; // 29 chars
-const char* LONG_INSTRUCTION = "SEEK IMMEDIATE SHELTER/CONTACT CNL"; // 34 chars (will be truncated)
+// --- 3. TEST STATE DEFINITIONS ---
+struct TestState {
+  const char* anomaly;    // Anomaly type (MAX 16 CHARS)
+  const char* instruction; // Actionable instruction (MAX 16 CHARS)
+  int duration;           // Duration of the state in ms
+};
 
-// Split into 16-character frames (Line 1 and Line 2)
-// NOTE: Text is padded/adjusted for alignment
-const char* FRAME_A_LINE1 = "!!!RAD LEAK DTECT!!!"; // Line 1, Chars 1-16
-const char* FRAME_B_LINE1 = "ED!!!           ";    // Line 1, Chars 17-32 (Padded to 16)
-const char* FRAME_A_LINE2 = "SEEK SHELTER/CNL"; // Line 2, Chars 1-16
-const char* FRAME_B_LINE2 = "EMERGENCY CONTACT"; // Line 2, Chars 17-32 (Padded to 16)
+// **TEXT IS GUARANTEED TO BE 16 CHARACTERS OR LESS**
+TestState states[] = {
+  // State 0: Initializing (Blue)
+  {"--NODE INIT DONE--", "LOADING DECISIONS", 2000}, 
 
-const int FLICKER_RATE = 500; // Time each frame is displayed (milliseconds)
+  // State 1: Radiation Leak Instruction (Critical)
+  {"RAD. LEAK! PULL!", "SEEK SHELTER ASAP", 3000}, 
+
+  // State 2: Fire/Overheat Instruction (Critical)
+  {"FIRE! CONTAIN!", "PULL OVER", 3000},
+  
+  // State 3: Crash/Impact Instruction (Critical)
+  {"CRASH! DANGER!", "STAY PUT CALL CNL", 3000},
+  
+  // State 4: Load Shift/Other Generic Warning
+  {"LOAD SHIFTED", "PULL OVER INSPECT", 3000},
+  
+  // State 5: NOMINAL (Rest State)
+  {"SYSTEM NEUTRAL", "ALL SYSTEMS OK", 3000},
+};
+
+const int numStates = sizeof(states) / sizeof(states[0]);
+int currentState = 0;
+unsigned long stateStartTime;
+const int flashRate = 200; // milliseconds for the LCD flash cycle
 
 // ----------------------------------------------------------------
 // --- SETUP FUNCTION ---
 // ----------------------------------------------------------------
 void setup() {
   Serial.begin(9600); 
+  
+  // LCD Setup
   lcd.begin(16, 2);
-  lcd.setRGB(100, 100, 255);
-  lcd.print("Flicker-Scroll Test");
-  delay(2000);
+  
+  stateStartTime = millis();
 }
 
 // ----------------------------------------------------------------
 // --- LOOP FUNCTION ---
 // ----------------------------------------------------------------
 void loop() {
+  TestState current = states[currentState];
   unsigned long currentTime = millis();
   
-  // Set Flashing Red Color
-  if (currentTime % 100 < 50) { 
-      lcd.setRGB(255, 0, 0); 
-  } else {
-      lcd.setRGB(0, 0, 0); 
+  // --- A. State Transition Logic ---
+  if (currentTime - stateStartTime >= current.duration) {
+    currentState = (currentState + 1) % numStates; 
+    stateStartTime = currentTime;
+    
+    // Force text update on new state
+    lcd.clear();
   }
+  
+  // Update the current state after transition
+  current = states[currentState];
 
-  // Determine which frame to show
-  if (currentTime % (FLICKER_RATE * 2) < FLICKER_RATE) {
-    // --- FRAME A ---
+  // --- B. Visual (LCD) Logic ---
+  // If not NOMINAL or Initializing (State 1 through 4)
+  if (currentState >= 1 && currentState <= 4) {
+    // Flashing Red Backlight
+    if (currentTime % flashRate < (flashRate / 2)) { 
+        lcd.setRGB(255, 0, 0); // Red
+    } else {
+        lcd.setRGB(0, 0, 0); // Off 
+    }
+    
+    // Line 1: The Anomaly Type
     lcd.home();
-    lcd.print(FRAME_A_LINE1);
+    lcd.print(current.anomaly);
+    
+    // Line 2: ACTIONABLE INSTRUCTION
     lcd.setCursor(0, 1);
-    lcd.print(FRAME_A_LINE2);
+    lcd.print(current.instruction);
+    
   } else {
-    // --- FRAME B ---
-    lcd.home();
-    lcd.print(FRAME_B_LINE1);
-    lcd.setCursor(0, 1);
-    lcd.print(FRAME_B_LINE2);
-  }
+    // NOMINAL/Initial States
+    if (currentState == 0) lcd.setRGB(100, 100, 255); // Blue
+    if (currentState == 5) lcd.setRGB(0, 255, 0);     // Green
 
-  // Simulate continuous buzzer tone (if testing sound later)
-  // digitalWrite(BUZZER_PIN, HIGH);
+    lcd.home();
+    lcd.print(current.anomaly);
+    lcd.setCursor(0, 1);
+    lcd.print(current.instruction);
+
+    delay(50); // Small delay for stability
+  }
 }
