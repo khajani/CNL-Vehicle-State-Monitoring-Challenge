@@ -9,7 +9,7 @@ char pass[] = "1236393639";     // <-- CHANGE THIS
 
 // ThingSpeak Channel and API Key
 unsigned long myChannelNumber = 3100192;          // Your ThingSpeak Channel ID (e.g., 123456) <-- CHANGE THIS
-const char * myWriteAPIKey = UCC3VTI2I10FKA4G; // <-- CHANGE THIS
+const char * myWriteAPIKey = "UCC3VTI2I10FKA4G"; // <-- CHANGE THIS
 
 // -------------------------------------------------------------------
 // GLOBAL VARIABLES
