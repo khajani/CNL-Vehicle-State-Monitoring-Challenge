@@ -18,16 +18,16 @@ TestState states[] = {
   {"--NODE INIT DONE--", "LOADING DECISIONS", 2000}, 
 
   // State 1: Radiation Leak Instruction (Critical)
-  {"RAD. LEAK! PULL!", "SEEK SHELTER ASAP", 3000}, 
+  {"RAD. LEAK! STOP!", "SHELTER ASAP", 3000}, 
 
   // State 2: Fire/Overheat Instruction (Critical)
   {"FIRE! CONTAIN!", "PULL OVER", 3000},
   
   // State 3: Crash/Impact Instruction (Critical)
-  {"CRASH! DANGER!", "STAY PUT CALL CNL", 3000},
+  {"CRASH! DANGER!", "STOP, CALL CNL", 3000},
   
   // State 4: Load Shift/Other Generic Warning
-  {"LOAD SHIFTED", "PULL OVER INSPECT", 3000},
+  {"LOAD SHIFTED", "STOP INSPECT", 3000},
   
   // State 5: NOMINAL (Rest State)
   {"SYSTEM NEUTRAL", "ALL SYSTEMS OK", 3000},
