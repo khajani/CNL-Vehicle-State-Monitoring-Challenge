@@ -19,7 +19,7 @@
 #define SAMPLES 256
 #define SAMPLE_FREQ 400
 #define LED_PIN 13
-#define FREQ_THRESHOLD 200.0
+#define FREQ_THRESHOLD 50000
 
 //magnetometer variables
 float magx = 0; float magy = 0; float magz = 0; float magn = 0;
@@ -135,10 +135,16 @@ void loop(){
 
     double freq_diff //VAR FOR ACTUAL USAGE
     = compareToBaseline(); //method to compare sample sets
-    Serial.println(freq_diff);
+
+    const float alpha = 0.2;  // smoothing factor, 0 < alpha <= 1
+    static double smooth_diff = 0;  // remembers previous value
+    smooth_diff = alpha * freq_diff + (1 - alpha) * smooth_diff;
+
+
+    Serial.println(smooth_diff);
 
     //basic LED test; will be replaced with LCD code later
-    if (freq_diff > FREQ_THRESHOLD) {
+    if (smooth_diff > FREQ_THRESHOLD) {
       digitalWrite(LED_PIN, HIGH); //light up LED if threshold exceeded
     } else {
       digitalWrite(LED_PIN, LOW);
@@ -202,6 +208,7 @@ void recordBaseline() {
 double compareToBaseline() {
   double diff = 0.0;
 
+  
   //iterate through indices of live and baseline sets
   for (int i = 0; i < SAMPLES/2; i++) {
     //what is the difference between mag in each set?
