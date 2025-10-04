@@ -4,13 +4,12 @@
 // -------------------------------------------------------------------
 // 1. YOUR PRIVATE CREDENTIALS (REPLACE THE PLACEHOLDER VALUES BELOW)
 // -------------------------------------------------------------------
-char ssid[] = "Your_WiFi_Network_Name"; // <-- CHANGE THIS
-char pass[] = "Your_WiFi_Password";     // <-- CHANGE THIS
+char ssid[] = "Kj's iPhone"; // <-- CHANGE THIS
+char pass[] = "1236393639";     // <-- CHANGE THIS
 
 // ThingSpeak Channel and API Key
-// NOTE: For this test, we assume Field 1 is for 'Temperature'
-unsigned long myChannelNumber = XXXXXX;          // Your ThingSpeak Channel ID (e.g., 123456)
-const char * myWriteAPIKey = "YOUR_WRITE_API_KEY"; // <-- CHANGE THIS
+unsigned long myChannelNumber = 3100192;          // Your ThingSpeak Channel ID
+const char * myWriteAPIKey = UCC3VTI2I10FKA4G; // <-- CHANGE THIS
 
 // -------------------------------------------------------------------
 // GLOBAL VARIABLES
@@ -54,24 +53,64 @@ void setup() {
 // MAIN LOOP FUNCTION
 // -------------------------------------------------------------------
 void loop() {
-  // --- SIMULATE SENSOR DATA ---
-  // Generates a random value between 20.00 and 30.00
-  // This simulates a steady temperature reading.
-  float simulatedTemperature = random(2000, 3000) / 100.0;
   
-  Serial.print("Simulated Temp: ");
-  Serial.print(simulatedTemperature);
-  Serial.println(" C");
+  // --- SENSOR DATA VARIABLES ---
+  float score;
+  float gForce;
+  float temperature;
+  float latitude;
+  float longitude;
+  
+  // ----------------------------------------------------------------------
+  // *** REPLACE THIS SECTION WITH YOUR ACTUAL SENSOR CODE ***
+  // ----------------------------------------------------------------------
+  
+  // Field 1: Score (Simple random value simulation)
+  score = random(50, 101);             
 
-  // --- WRITE DATA TO THINGSPEAK ---
-  // Field 1 is the 'Temperature' field we set up in ThingSpeak
-  int field_number = 1;
-  int x = ThingSpeak.writeField(myChannelNumber, field_number, simulatedTemperature, myWriteAPIKey);
+  // Field 2: G-Force (MPU-6050 simulation: typical range 0.9g to 1.1g)
+  // In a real sketch, you would use: gForce = MPU6050.getGForceZ(); 
+  gForce = random(90, 110) / 100.0;
+  
+  // Field 3: Temperature (DHT sensor simulation: typical range 15C to 35C)
+  // In a real sketch, you would use: temperature = dht.readTemperature();
+  temperature = random(1500, 3500) / 100.0;
+  
+  // Field 4: Latitude (GPS simulation: typical latitude, accurate to 4 decimal places)
+  // In a real sketch, you would use: latitude = gps.location.lat();
+  latitude = random(434000, 434500) / 10000.0; // E.g., 43.4000 to 43.4500
+  
+  // Field 5: Longitude (GPS simulation: typical longitude, accurate to 4 decimal places)
+  // In a real sketch, you would use: longitude = gps.location.lng();
+  longitude = random(-805000, -805500) / 10000.0; // E.g., -80.5000 to -80.5500
+
+  // ----------------------------------------------------------------------
+  // *** END OF SENSOR CODE SECTION ***
+  // ----------------------------------------------------------------------
+  
+  
+  Serial.println("\n--- Sensor Readings ---");
+  Serial.print("Field 1 (Score): "); Serial.println(score);
+  Serial.print("Field 2 (G-Force): "); Serial.println(gForce);
+  Serial.print("Field 3 (Temp): "); Serial.print(temperature); Serial.println(" C");
+  Serial.print("Field 4 (Lat): "); Serial.println(latitude, 4);
+  Serial.print("Field 5 (Long): "); Serial.println(longitude, 4);
+  
+  // --- SET UP ALL FIELDS ---
+  // Note: ThingSpeak.setField automatically handles data types (float, int, etc.)
+  ThingSpeak.setField(1, score);
+  ThingSpeak.setField(2, gForce);
+  ThingSpeak.setField(3, temperature);
+  ThingSpeak.setField(4, latitude);
+  ThingSpeak.setField(5, longitude);
+  
+  // --- WRITE DATA TO THINGSPEAK (SINGLE REQUEST) ---
+  int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
 
   if (x == 200) {
-    Serial.println("Channel update successful.");
+    Serial.println("✅ Data sent successfully! (HTTP 200)");
   } else {
-    Serial.print("Problem updating channel. HTTP error code: ");
+    Serial.print("❌ Problem updating channel. HTTP error code: ");
     Serial.println(x);
   }
 
