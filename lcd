@@ -1,2 +1,118 @@
-#include <Grove-LCD RGB Backlight>
-#include <rgb_lcd.h> //control LCD backlight colour
+// LCD and Buzzer Test Code for Guardian Node Interface
+
+#include <Wire.h>
+#include <rgb_lcd.h>
+
+// --- PIN DEFINITIONS ---
+// Digital Pin for the Grove Buzzer (adjust if needed)
+#define BUZZER_PIN 8 
+
+// Initialize LCD Object
+rgb_lcd lcd;
+
+// --- STATE DEFINITIONS ---
+// Define simple color triplets (R, G, B) and text for testing
+struct TestState {
+  int r;
+  int g;
+  int b;
+  int duration; // milliseconds
+  bool buzz;
+  const char* line1;
+  const char* line2;
+};
+
+TestState states[] = {
+  // State 0: Initialization (White/Blue)
+  {100, 100, 255, 2000, false, "CNL Guardian Node", "Testing Interface..."},
+  
+  // State 1: NOMINAL (Green)
+  {0, 255, 0, 3000, false, "System NOMINAL", "Temp: 22.5C G: 1.0"},
+  
+  // State 2: WARNING (Yellow, Intermittent Buzz)
+  {255, 255, 0, 4000, true, "WARNING! Score: 4", "ROUGH ROAD detected"},
+  
+  // State 3: CRITICAL (Flashing Red, Continuous Buzz)
+  {255, 0, 0, 4000, true, "!!! CRITICAL ALERT !!!", "CRASH/IMPACT"},
+  
+  // State 4: Silent Check (Blue)
+  {0, 0, 255, 3000, false, "System Reset", "Test Complete. OK."},
+};
+
+const int numStates = sizeof(states) / sizeof(states[0]);
+int currentState = 0;
+unsigned long stateStartTime;
+
+// ----------------------------------------------------------------
+// --- SETUP FUNCTION ---
+// ----------------------------------------------------------------
+void setup() {
+  Serial.begin(9600);
+  
+  // LCD Setup
+  lcd.begin(16, 2);
+  
+  // Buzzer Setup
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+  
+  stateStartTime = millis();
+}
+
+// ----------------------------------------------------------------
+// --- LOOP FUNCTION ---
+// ----------------------------------------------------------------
+void loop() {
+  unsigned long currentTime = millis();
+  
+  // Check if it's time to switch to the next state
+  if (currentTime - stateStartTime >= states[currentState].duration) {
+    currentState = (currentState + 1) % numStates; // Cycle through states
+    stateStartTime = currentTime;
+    
+    // Reset buzzer state when switching
+    digitalWrite(BUZZER_PIN, LOW);
+  }
+  
+  // --- Interface Update Logic ---
+  TestState current = states[currentState];
+  
+  // 1. LCD Color and Text
+  if (currentState == 3) { // Special handling for FLASING RED (Critical State)
+    if (currentTime % 200 < 100) { // Flash rate: on for 100ms, off for 100ms
+        lcd.setRGB(current.r, current.g, current.b); // Red
+    } else {
+        lcd.setRGB(0, 0, 0); // Off (Black)
+    }
+  } else {
+    // Normal color display
+    lcd.setRGB(current.r, current.g, current.b);
+  }
+  
+  // Only update text once per state transition to prevent flickering
+  static int lastState = -1;
+  if (currentState != lastState) {
+    lcd.clear();
+    lcd.home();
+    lcd.print(current.line1);
+    lcd.setCursor(0, 1);
+    lcd.print(current.line2);
+    lastState = currentState;
+  }
+  
+  // 2. Buzzer Control
+  if (current.buzz) {
+    if (currentState == 2) { // WARNING: Intermittent Buzz
+      if (currentTime % 1000 < 500) { // On for 500ms, off for 500ms
+        digitalWrite(BUZZER_PIN, HIGH);
+      } else {
+        digitalWrite(BUZZER_PIN, LOW);
+      }
+    } else if (currentState == 3) { // CRITICAL: Continuous Buzz
+      digitalWrite(BUZZER_PIN, HIGH);
+    }
+  } else {
+    // Ensure buzzer is off for Nominal/Initial states
+    digitalWrite(BUZZER_PIN, LOW);
+  }
+}
