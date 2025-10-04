@@ -16,10 +16,12 @@
 #include <arduinoFFT.h>
 
 //FFT configuration
-#define SAMPLES 256
-#define SAMPLE_FREQ 400
+#define SAMPLES 512
+#define SAMPLE_FREQ 800
 #define LED_PIN 13
 #define FREQ_THRESHOLD 50000
+
+int IR_PIN = A0;
 
 //magnetometer variables
 float magx = 0; float magy = 0; float magz = 0; float magn = 0;
@@ -90,6 +92,11 @@ void setup(){
 }
 
 void loop(){
+
+  //IR CODE
+  //Serial.println(analogRead(IR_PIN));
+
+  //IMU CODE
   sBmx160SensorData_t Omagn, Ogyro, Oaccel;
 
   /* Get a new sensor event */
@@ -141,7 +148,7 @@ void loop(){
     smooth_diff = alpha * freq_diff + (1 - alpha) * smooth_diff;
 
 
-    Serial.println(smooth_diff);
+    Serial.println(freq_diff);
 
     //basic LED test; will be replaced with LCD code later
     if (smooth_diff > FREQ_THRESHOLD) {
@@ -150,7 +157,7 @@ void loop(){
       digitalWrite(LED_PIN, LOW);
     }
 
-    delay(100); //change loop rate here
+    delay(20); //change loop rate here
 }
 
 //method to 
@@ -168,7 +175,10 @@ void collectSamples() {
     bmx160.getAllData(&Oaccel, NULL, NULL); //don't need mag and gyro here
 
     //set index in sample buffer to the norm accel reading
-    vReal[i] = sqrt((double)Oaccel.x*Oaccel.x + (double)Oaccel.y*Oaccel.y + (double)Oaccel.z*Oaccel.z);
+    vReal[i] = sqrt(
+      //(double)Oaccel.x*Oaccel.x +
+      (double)Oaccel.y*Oaccel.y +
+      (double)Oaccel.z*Oaccel.z);
 
     vImag[i] = 0.0; //set index in imaginary buffer to 0, will fill with all 0s
 
@@ -208,9 +218,9 @@ void recordBaseline() {
 double compareToBaseline() {
   double diff = 0.0;
 
-  
+  const int LOW_BIN = 0; //ignore low frequency bins
   //iterate through indices of live and baseline sets
-  for (int i = 0; i < SAMPLES/2; i++) {
+  for (int i = LOW_BIN; i < SAMPLES/2; i++) {
     //what is the difference between mag in each set?
     double delta = vReal[i] - baselineSpectrum[i];
     //add difference to overall difference. square penalizes larger differences more
