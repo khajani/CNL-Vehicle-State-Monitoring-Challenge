@@ -1,7 +1,259 @@
+//Libraries
+#include <Wire.h>
+#include <DFRobot_BMX160>
+#include <Adafruit_AHTx0>
+#include <Grove-LCD RGB Backlight>
+#include <rgb_lcd.h> //control LCD backlight colour
 
-DFRobot_BMX160
-Adafruit_AHTx0
-Grove-LCD RGB Backlight
+//Pin Definitions
+#define BUZZER_PIN 8      // digital pin for grove buzzer
+#define IR_SENSOR_PIN A0  // analog pin for IR radiation sensor
+#define ROTARY_PIN A1     // analog pin for the rotary angle sensor
 
+// Initialize Sensor Objects
+DFRobot_BMX160 bmx160;
+Adafruit_AHTx0 aht;
+rgb_lcd lcd;
 
-analogRead(analogPin)
+// Thresholds & Config
+// CHANGE AFTER TESTING 
+#define HAZARD_LEVEL_WARNING 3
+#define HAZARD_LEVEL_CRITICAL 6
+
+// Sensor-Specific Trigger Values
+//VALUES SUBJECT TO CHANGE
+#define G_FORCE_WARNING 1.5   // g
+#define G_FORCE_CRITICAL 4.0  // g
+#define TILT_CRITICAL 25.0    // degrees
+#define TEMP_CRITICAL 50.0    // Celsius (Container Internal Temp)
+#define IR_CRITICAL_LOW 500   // Low analog reading indicates strong 'leak' (0-1023 range)
+#define IR_WARNING_LOW 700    // Mid-range reading
+
+int currentHazardScore = 0;
+String primaryAnomaly = "NONE";
+
+// SETUP FUNCTION
+void setup() {
+  Serial.begin(9600); // for output debugging
+
+  // Sensor
+  Wire.begin(); 
+
+  // LCD Setup
+  lcd.begin(16, 2);
+  lcd.setRGB(0, 0, 0); // Start black
+  lcd.print("Guardian Node Init");
+
+  // Buzzer Setup
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  // BMX160 IMU Initializing 
+  if (bmx160.begin() == BMX160_OK) {
+    Serial.println("BMX160 initialized.");
+  } else {
+    Serial.println("FAIL: BMX160 initialization.");
+  }
+  
+  // AHT20 Temp/Humidity Initializing 
+  if (aht.begin()) {
+    Serial.println("AHT20 initialized.");
+  } else {
+    Serial.println("FAIL: AHT20 initialization.");
+  }
+  
+  // Initial message
+  lcd.setRGB(0, 255, 0); // Green
+  delay(1000);
+}
+
+// LOOP FUNCTION
+void loop() {
+
+  // READ ALL SENSORS
+  float gForce = readIMU_GForce();
+  float tiltAngle = readIMU_Tilt();
+  float internalTemp = readAHT20_Temp();
+  int irReading = analogRead(IR_SENSOR_PIN);
+  int rotaryValue = analogRead(ROTARY_PIN);
+
+  // RUN AUTONOMOUS HAZARD LEVEL CHECK (HLC)
+  runHLC(gForce, tiltAngle, internalTemp, irReading, rotaryValue);
+
+  // UPDATE DRIVER INTERFACE (LCD and Buzzer)
+  updateDriverInterface();
+
+  // LOW-POWER DATA BURST SIMULATION (Placeholder for IR Emitter flash)
+  if (currentHazardScore >= HAZARD_LEVEL_WARNING) {
+    simulateEmergencyBurst(currentHazardScore);
+  }
+
+  // Sample Rate: Check sensors every 500 milliseconds (half-second)
+  delay(500); 
+}
+
+// ----------------------------------------------------------------
+// HELPER FUNCTIONS
+
+// IMU Reading Function: Calculates 3D acceleration magnitude (g-force)
+float readIMU_GForce() {
+  BMX160::Accl_Value accel;
+  bmx160.getAllData();
+  accel = bmx160.get // Simplified to magnitude for quick response
+  
+  float acc_x = accel.x / 16384.0; // Convert to g
+  float acc_y = accel.y / 16384.0; // Convert to g
+  float acc_z = accel.z / 16384.0; // Convert to g
+
+  // Calculate magnitude w/ sqrt(x^2 + y^2 + z^2)
+  return sqrt(acc_x*acc_x + acc_y*acc_y + acc_z*acc_z);
+}
+
+// IMU Reading Function: Calculates Tilt Angle (for tipping)
+float readIMU_Tilt() {
+  BMX160::Accl_Value accel;
+  bmx160.getAllData();
+  accel = bmx160.getAcceleration();
+  
+  // Simple calculation of Roll angle (degrees)
+  float roll = atan2(accel.y, accel.z) * 180.0 / PI;
+
+  // absolute tip magnitude
+  return abs(roll); 
+
+// AHT20 Reading Function: Gets Internal Package Temperature
+float readAHT20Temp() {
+  sensors_event_t humidity, temp;
+  aht.getEvent(&humidity, &temp); 
+  return temp.temperature; // Returns temperature in Celsius
+}
+
+// CORE LOGIC: Autonomous HAZARD LEVEL CHECK (HLC)
+void runHLC(float gForce, float tiltAngle, float internalTemp, int irReading, int rotaryValue) {
+  currentHazardScore = 0;
+  primaryAnomaly = "NONE";
+
+  // CRASH / IMPACT CHECK (Highest Priority)
+  if (gForce > G_FORCE_CRITICAL) {
+    currentHazardScore = 10;
+    primaryAnomaly = "CRASH/IMPACT";
+    return; // Immediate override, no need to check others
+  }
+
+  // TILT / ROLLOVER CHECK
+  if (tiltAngle > TILT_CRITICAL) {
+    currentHazardScore += 5;
+    if (primaryAnomaly == "NONE") primaryAnomaly = "TILT/ROLL";
+  } else if (gForce > G_FORCE_WARNING) {
+    currentHazardScore += 1;
+    if (primaryAnomaly == "NONE") primaryAnomaly = "ROUGH ROAD";
+  }
+
+  // RADIATION LEAK CHECK (Lower reading = stronger leak)
+  if (irReading < IR_CRITICAL_LOW) {
+    currentThreatScore += 4;
+    if (primaryAnomaly == "NONE") primaryAnomaly = "RADIATION LEAK";
+  } else if (irReading < IR_WARNING_LOW) {
+    currentThreatScore += 2;
+    if (primaryAnomaly == "NONE") primaryAnomaly = "Radiation Warning";
+  }
+
+  // FIRE / OVERHEAT CHECK
+  if (internalTemp > TEMP_CRITICAL) {
+    currentThreatScore += 3;
+    if (primaryAnomaly == "NONE") primaryAnomaly = "FIRE/OVERHEAT";
+  }
+
+  // LOAD SECURITY CHECK (Rotary Sensor Proxy - Assuming 50 is the 'loose' threshold)
+  // Calibrate this value during setup (e.g., if rotaryValue < 50)
+  if (rotaryValue < 50) { 
+    currentThreatScore += 1;
+    if (primaryAnomaly == "NONE") primaryAnomaly = "LOAD SHIFT/LOOSE";
+  }
+}
+
+// DRIVER INTERFACE UPDATE
+void updateDriverInterface() {
+  lcd.clear();
+  lcd.home();
+
+  if (currentHazardScore >= HAZARD_LEVEL_CRITICAL) {
+    // CRITICAL STATE: Flashing Red, Continuous Buzzer
+    lcd.setRGB(255, 0, 0); 
+    lcd.print("CRITICAL ALERT !!!");
+    lcd.setCursor(0, 1);
+    lcd.print(primaryAnomaly);
+    // Buzzer on continuously (or rapidly pulsed for attention)
+    digitalWrite(BUZZER_PIN, HIGH);
+    
+  } else if (currentHazardScore >= HAZARD_LEVEL_WARNING) {
+    // WARNING STATE: Yellow, Intermittent Buzzer
+    lcd.setRGB(255, 255, 0); 
+    lcd.print("WARNING! Score: ");
+    lcd.print(currentHazardScore);
+    lcd.setCursor(0, 1);
+    lcd.print(primaryAnomaly);
+    // Buzzer pulsed
+    if (millis() % 1000 < 500) {   // On for 500ms, off for 500ms
+      digitalWrite(BUZZER_PIN, HIGH);
+    } else {
+      digitalWrite(BUZZER_PIN, LOW);
+    }
+    
+  } else {
+    // NEUTRAL STATE: Green, Silent
+    lcd.setRGB(0, 255, 0);
+    lcd.print("System NEUTRAL");
+    lcd.setCursor(0, 1);
+    lcd.print("Temp:");
+    lcd.print(readAHT20_Temp());
+    lcd.print("C G:");
+    lcd.print(readIMU_GForce(), 1);
+    digitalWrite(BUZZER_PIN, LOW);
+  }
+}
+void updateDriverInterface() {
+  lcd.clear();
+  lcd.home();
+
+  if (currentHazardScore >= HAZARD_LEVEL_CRITICAL) {
+    // CRITICAL STATE: Flashing Red, Continuous Buzzer
+    // Toggle LCD color to make it flash
+    if (millis() % 200 < 100) { // Flash rate
+        lcd.setRGB(255, 0, 0); // Red
+    } else {
+        lcd.setRGB(0, 0, 0); // Off
+    }
+    
+    lcd.print("!!! CRITICAL ALERT !!!");
+    lcd.setCursor(0, 1);
+    lcd.print(primaryAnomaly);
+    // Buzzer on continuously
+    digitalWrite(BUZZER_PIN, HIGH);
+    
+  } else if (currentHazardScore >= HAZARD_LEVEL_WARNING) {
+    // WARNING STATE: Yellow, Intermittent Buzzer
+    lcd.setRGB(255, 255, 0); 
+    lcd.print("WARNING! Score: ");
+    lcd.print(currentHazardScore);
+    lcd.setCursor(0, 1);
+    lcd.print(primaryAnomaly);
+    // Buzzer pulsed
+    if (millis() % 1000 < 500) { 
+      digitalWrite(BUZZER_PIN, HIGH);
+    } else {
+      digitalWrite(BUZZER_PIN, LOW);
+    }
+    
+  } else {
+    // NEUTRAL STATE: Green, Silent
+    lcd.setRGB(0, 255, 0);
+    lcd.print("System NEUTRAL");
+    lcd.setCursor(0, 1);
+    lcd.print("Temp:");
+    lcd.print(readAHT20_Temp(), 1);
+    lcd.print("C G:");
+    lcd.print(readIMU_GForce(), 1);
+    digitalWrite(BUZZER_PIN, LOW);
+  }
+}
