@@ -9,7 +9,7 @@ char pass[] = "1236393639";     // <-- CHANGE THIS
 
 // ThingSpeak Channel and API Key
 unsigned long myChannelNumber = 3100192;          // Your ThingSpeak Channel ID (e.g., 123456) <-- CHANGE THIS
-const char * myWriteAPIKey = "UCC3VTI2I10FKA4G"; // <-- CHANGE THIS
+const char * myWriteAPIKey = "BAOHBAPAYCW24D6P"; // <-- CHANGE THIS
 
 // -------------------------------------------------------------------
 // GLOBAL VARIABLES
@@ -96,13 +96,18 @@ void loop() {
   ThingSpeak.setField(5, longitude);
   
   // --- WRITE DATA TO THINGSPEAK ---
-  int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
+  int http_response_code = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
 
-  if (x == 200) {
+  if (http_response_code == 200) {
     Serial.println("✅ Data sent successfully! (HTTP 200)");
   } else {
+    // THIS LINE IS CRUCIAL FOR DEBUGGING.
     Serial.print("❌ Problem updating channel. HTTP error code: ");
-    Serial.println(x);
+    Serial.println(http_response_code);
+    
+    // Most common ThingSpeak error codes:
+    // 400: Bad request (usually wrong API key or Channel ID).
+    // -301: ThingSpeak.begin(client) failed (Wi-Fi or DNS issue).
   }
 
   delay(20000); 
