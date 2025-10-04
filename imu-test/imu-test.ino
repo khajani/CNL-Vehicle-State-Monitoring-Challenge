@@ -13,11 +13,20 @@
  */
 #include <DFRobot_BMX160.h>
 
+float magx = 0;
+float magy = 0;
+float magz = 0;
+float magn = 0;
+
 DFRobot_BMX160 bmx160;
 void setup(){
   Serial.begin(115200);
   delay(20);
   
+  Serial.println("MagX MagY MagZ");
+
+
+
   //init the hardware bmx160  
   if (bmx160.begin() != true){
     Serial.println("init false");
@@ -54,14 +63,22 @@ void loop(){
   /* Get a new sensor event */
   bmx160.getAllData(&Omagn, &Ogyro, &Oaccel);
 
+  //get magnetometer results
+  magx= Omagn.x;
+  magy = Omagn.y;
+  magz = Omagn.z;
+  magn = sqrt(sq(magx) + sq(magy) + sq(magz));
+
   /* Display the magnetometer results (magn is magnetometer in uTesla) */
  // Serial.print("M ");
-  //Serial.print("X: "); 
-  Serial.print(Omagn.x); Serial.print(" ");
-  //Serial.print("Y: "); 
-  Serial.print(Omagn.y); Serial.print(" ");
-  //Serial.print("Z: "); 
-  Serial.print(Omagn.z); Serial.print(" ");
+  // Serial.print("X: "); 
+  Serial.print(magx); Serial.print(" ");
+  // Serial.print("Y: "); 
+  Serial.print(magy); Serial.print(" ");
+  // Serial.print("Z: "); 
+  Serial.print(magz); Serial.print(" ");
+
+  Serial.print(magn); Serial.print(" ");
  // Serial.println("uT");
 
 
@@ -73,12 +90,15 @@ void loop(){
   // Serial.print("Z: "); Serial.print(Ogyro.z); Serial.print("  ");
   // Serial.println("g");
   
-  // /* Display the accelerometer results (accelerometer data is in m/s^2) */
-  // Serial.print("A ");
-  // Serial.print("X: "); Serial.print(Oaccel.x    ); Serial.print("  ");
-  // Serial.print("Y: "); Serial.print(Oaccel.y    ); Serial.print("  ");
-  // Serial.print("Z: "); Serial.print(Oaccel.z    ); Serial.print("  ");
-  // Serial.println("m/s^2");
+  // // /* Display the accelerometer results (accelerometer data is in m/s^2) */
+  // // Serial.print("A ");
+  // // Serial.print("X: "); 
+  // Serial.print(Oaccel.x); Serial.print(" ");
+  // // Serial.print("Y: "); 
+  // Serial.print(Oaccel.y); Serial.print(" ");
+  // // Serial.print("Z: "); 
+  // Serial.print(Oaccel.z); Serial.print(" ");
+  // // Serial.println("m/s^2");
 
   Serial.println("");
 
