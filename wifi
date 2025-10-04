@@ -1,0 +1,80 @@
+#include <WiFiS3.h>
+#include <ThingSpeak.h>
+
+// -------------------------------------------------------------------
+// 1. YOUR PRIVATE CREDENTIALS (REPLACE THE PLACEHOLDER VALUES BELOW)
+// -------------------------------------------------------------------
+char ssid[] = "Your_WiFi_Network_Name"; // <-- CHANGE THIS
+char pass[] = "Your_WiFi_Password";     // <-- CHANGE THIS
+
+// ThingSpeak Channel and API Key
+// NOTE: For this test, we assume Field 1 is for 'Temperature'
+unsigned long myChannelNumber = XXXXXX;          // Your ThingSpeak Channel ID (e.g., 123456)
+const char * myWriteAPIKey = "YOUR_WRITE_API_KEY"; // <-- CHANGE THIS
+
+// -------------------------------------------------------------------
+// GLOBAL VARIABLES
+// -------------------------------------------------------------------
+WiFiClient client;
+int status = WL_IDLE_STATUS;
+
+// -------------------------------------------------------------------
+// SETUP FUNCTION
+// -------------------------------------------------------------------
+void setup() {
+  Serial.begin(9600);
+  delay(100);
+
+  // Check for the WiFi module (specific to Uno R4 WiFi)
+  if (WiFi.status() == WL_NO_MODULE) {
+    Serial.println("Communication with WiFi module failed!");
+    while (true); // Halt the program
+  }
+
+  // Attempt to connect to WiFi network
+  while (status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to SSID: ");
+    Serial.println(ssid);
+    status = WiFi.begin(ssid, pass);
+
+    // Wait 10 seconds for connection
+    delay(10000);
+  }
+
+  // Connection successful
+  Serial.println("\nConnected to WiFi!");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  // Initialize ThingSpeak client
+  ThingSpeak.begin(client);
+}
+
+// -------------------------------------------------------------------
+// MAIN LOOP FUNCTION
+// -------------------------------------------------------------------
+void loop() {
+  // --- SIMULATE SENSOR DATA ---
+  // Generates a random value between 20.00 and 30.00
+  // This simulates a steady temperature reading.
+  float simulatedTemperature = random(2000, 3000) / 100.0;
+  
+  Serial.print("Simulated Temp: ");
+  Serial.print(simulatedTemperature);
+  Serial.println(" C");
+
+  // --- WRITE DATA TO THINGSPEAK ---
+  // Field 1 is the 'Temperature' field we set up in ThingSpeak
+  int field_number = 1;
+  int x = ThingSpeak.writeField(myChannelNumber, field_number, simulatedTemperature, myWriteAPIKey);
+
+  if (x == 200) {
+    Serial.println("Channel update successful.");
+  } else {
+    Serial.print("Problem updating channel. HTTP error code: ");
+    Serial.println(x);
+  }
+
+  // Wait 20 seconds before sending the next update
+  delay(20000);
+}
