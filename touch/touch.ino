@@ -1,7 +1,7 @@
 #define ctsPin 3 // Pin for capactitive touch sensor
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   pinMode(ctsPin, INPUT);
 }
 

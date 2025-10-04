@@ -17,7 +17,7 @@
 
 //FFT configuration
 #define SAMPLES 512
-#define SAMPLE_FREQ 800
+#define SAMPLE_FREQ 400
 #define LED_PIN 13
 #define FREQ_THRESHOLD 50000
 
@@ -171,8 +171,8 @@ void collectSamples() {
     unsigned long tStart = micros();
 
     //get sensor data in this method (diff from loop method)
-    sBmx160SensorData_t Oaccel;
-    bmx160.getAllData(&Oaccel, NULL, NULL); //don't need mag and gyro here
+    sBmx160SensorData_t Omagn, Ogyro, Oaccel;
+    bmx160.getAllData(&Omagn, &Ogyro, &Oaccel); //don't need mag and gyro here
 
     //set index in sample buffer to the norm accel reading
     vReal[i] = sqrt(
