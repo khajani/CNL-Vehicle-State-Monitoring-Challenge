@@ -125,9 +125,9 @@ void loop(){
   //ACCELEROMETER!!
 
     /* Display the accelerometer results (accelerometer data is in m/s^2) */
-    Serial.print(Oaccel.x); Serial.print(" ");
-    Serial.print(Oaccel.y); Serial.print(" ");
-    Serial.print(Oaccel.z); Serial.print(" ");
+    // Serial.print(Oaccel.x); Serial.print(" ");
+    // Serial.print(Oaccel.y); Serial.print(" ");
+    // Serial.print(Oaccel.z); Serial.print(" ");
 
     //actual FFT code
     collectSamples();
@@ -135,6 +135,7 @@ void loop(){
 
     double freq_diff //VAR FOR ACTUAL USAGE
     = compareToBaseline(); //method to compare sample sets
+    Serial.println(freq_diff);
 
     //basic LED test; will be replaced with LCD code later
     if (freq_diff > FREQ_THRESHOLD) {
@@ -149,12 +150,16 @@ void loop(){
 //method to 
 void collectSamples() {
   //get time spacing for sample readings. unsigned long = large pos int
-  unsigned long microsPerSample = 1000000UL / SAMPLING_FREQUENCY;
+  unsigned long microsPerSample = 1000000UL / SAMPLE_FREQ;
 
   //loop to take amount of samples
   for (int i = 0; i < SAMPLES; i++) {
     //get time since arduino started
     unsigned long tStart = micros();
+
+    //get sensor data in this method (diff from loop method)
+    sBmx160SensorData_t Oaccel;
+    bmx160.getAllData(&Oaccel, NULL, NULL); //don't need mag and gyro here
 
     //set index in sample buffer to the norm accel reading
     vReal[i] = sqrt((double)Oaccel.x*Oaccel.x + (double)Oaccel.y*Oaccel.y + (double)Oaccel.z*Oaccel.z);
