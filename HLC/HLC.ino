@@ -15,7 +15,7 @@ char pass[] = "1236393639";
 
 // ThingSpeak Channel and API Key
 unsigned long myChannelNumber = 3100192; // REPLACE with your final channel number
-const char * myWriteAPIKey = "BAOHBAPAYCW24D6P"; // REPLACE with your final Write API Key
+const char * myWriteAPIKey = "NWU0RZBT5OC4183A"; // REPLACE with your final Write API Key
 
 // **MAG/GPS Configuration**
 const float DECLINATION_ANGLE = 12.5; // IMPORTANT: Set this for your location's magnetic variation!
