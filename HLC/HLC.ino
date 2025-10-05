@@ -1,4 +1,3 @@
-// -------------------- 1. REQUIRED LIBRARIES (Full List) --------------------
 #include <WiFiS3.h>      // REQUIRED for Arduino Uno R4 WiFi networking
 #include <ThingSpeak.h>  // REQUIRED for ThingSpeak functions
 #include <Adafruit_LIS3MDL.h> // Magnetometer Library
@@ -15,8 +14,8 @@ char ssid[] = "KJ";
 char pass[] = "1236393639";
 
 // ThingSpeak Channel and API Key
-unsigned long myChannelNumber = 3100192; 
-const char * myWriteAPIKey = "BAOHBAPAYCW24D6P"; 
+unsigned long myChannelNumber = 3100192; // REPLACE with your final channel number
+const char * myWriteAPIKey = "NWU0RZBT5OC4183A"; // REPLACE with your final Write API Key
 
 // **MAG/GPS Configuration**
 const float DECLINATION_ANGLE = 12.5; // IMPORTANT: Set this for your location's magnetic variation!
@@ -52,23 +51,24 @@ const float criticalAngle = 80.0;
 
 // *** HAZARD LEVEL CHECK (HLC) THRESHOLDS (Used for determining state and additive score) ***
 // HARD CRITICAL ALERTS
-const float THRESH_RADIATION_CRITICAL = 900.0;  // High IR reading -> Instant Score 10
+// NOTE: RAISED to 1000.0 because the sensor baseline (940) was triggering the old 900.0 threshold.
+const float THRESH_RADIATION_CRITICAL = 1000.0;  // High IR reading -> Instant Score 10
 const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> Instant Score 10
 // WARNING ALERTS (used for additive scoring)
-const float THRESH_OVERHEAT_WARNING   = 80.0;   // In-box Temp/IR
-const float THRESH_TILT_WARNING       = criticalAngle; 
-const double THRESH_FFT_WARNING       = 100000.0; 
-const float THRESH_MAG_DEVIATION      = 50.0;   
-const int THRESH_TOUCH_BREACH         = HIGH;   
+// NOTE: RAISED to 950.0 to prevent the new 940 baseline from constantly triggering the +2 score.
+const float THRESH_OVERHEAT_WARNING   = 950.0;   // In-box Temp/IR (Score +2)
+const float THRESH_TILT_WARNING       = criticalAngle; // Score +1
+const double THRESH_FFT_WARNING       = 100000.0; // Score +1
+const float THRESH_MAG_DEVIATION      = 50.0;   // Score +1
+const int THRESH_TOUCH_BREACH         = HIGH;   // Score +1
 
 // *** ADDITIVE SCORING THRESHOLD ***
 const int THRESH_SCORE_CUMULATIVE_CRITICAL = 5; // Cumulative score of 5 or more triggers SOS alert
 
 // --- STATE CONSTANTS (Used INTERNALLY for LCD message lookup and Alarm type) ---
-// STATE 1, 3, 10 all result in hazardScore=10 and SOS Alarm.
 const int STATE_INIT = 0;
 const int STATE_CRITICAL_CUMULATIVE = 1; // Cumulative score >= 5
-const int STATE_FIRE = 2;                // No longer used to set primary state, but kept for historical context.
+const int STATE_FIRE = 2;                
 const int STATE_CRASH = 3;               // Hard G-force detection
 const int STATE_WARNING = 4;             // Any cumulative score > 0 and < 5
 const int STATE_NOMINAL = 5;             // All clear (Score 0)
@@ -77,7 +77,7 @@ const int STATE_RAD_LEAK = 10;           // Hard radiation detection
 
 // --- BUZZER AND TOUCH SENSORS ---
 #define BUZZER_PIN 8  // Digital pin for the buzzer (D8)
-#define TOUCH_PIN 3   // Digital pin for the touch sensor (D7)
+#define TOUCH_PIN 7   // Digital pin for the touch sensor (D7)
 #define BUTTON_PIN 6 // Digital pin for baseline re-record button
 
 // Morse Code Timing Constants (SOS Pattern for Critical Alerts)
@@ -86,11 +86,11 @@ const int BUZZ_FREQ = 1800; // High-pitched, urgent frequency
 // SOS Timing (S.O.S: 3 Short, 3 Long, 3 Short)
 const unsigned long MORSE_DOT_MS = 100;
 const unsigned long MORSE_DASH_MS = 300;
-const unsigned long MORSE_SOS_CYCLE_MS = 3000; // Total cycle length (~3 seconds)
+const unsigned long MORSE_SOS_CYCLE_MS = 3000; 
 
 // Single Short Buzz Timing (for Minor Warning States)
 const unsigned long BUZZ_PULSE_MS = 100;
-const unsigned long BUZZ_CYCLE_MS = 500; // 100ms tone, 400ms silence
+const unsigned long BUZZ_CYCLE_MS = 500; 
 
 
 // LCD STATE MAPPING (HLC States)
@@ -105,12 +105,12 @@ TestState states[] = {
   {"--INIT DONE--", "LOADING DECISIONS"}, 
   // Index 1: STATE_CRITICAL_CUMULATIVE 
   {"CRIT. WARNING", "PULL OVER, CALL"}, 
-  // Index 2: STATE_FIRE (Still shows specific text if needed for state 2)
+  // Index 2: STATE_FIRE 
   {"FIRE! CONTAIN!", "PULL OVER"},
   // Index 3: STATE_CRASH 
   {"CRASH! DANGER!", "STOP, CALL CNL"},
   // Index 4: STATE_WARNING (Generic minor warning)
-  {"MINOR WARNING", "CAUTION"},
+  {"MINOR WARNING", "CHECK TELEMETRY"},
   // Index 5: STATE_NOMINAL 
   {"SYSTEM NEUTRAL", "ALL SYSTEMS OK"},
   // Index 6: STATE_RAD_LEAK 
@@ -122,7 +122,7 @@ int hazardScore = 0;                // Value logged to Field 8 (0-6, or 10)
 const int flashRate = 200;          // milliseconds for the LCD flash cycle
 
 // --- NON-BLOCKING TIMER VARIABLES ---
-const unsigned long THINGSPEAK_INTERVAL_MS = 5000; // New 5-second update interval
+const unsigned long THINGSPEAK_INTERVAL_MS = 5000; // 5-second update interval
 unsigned long lastThingSpeakTime = 0;
 // ------------------------------------
 
@@ -263,7 +263,6 @@ void setup() {
   ThingSpeak.begin(client);
 
   // --- IR SENSOR STABILIZATION ---
-  // Stabilizes the sensor to prevent an immediate false "RAD. LEAK!" alarm on boot.
   Serial.println(F("Stabilizing IR Sensor..."));
   for(int i = 0; i < 10; i++) {
     analogRead(IR_PIN); 
@@ -339,7 +338,9 @@ void loop() {
   // -------------------- B & C. HAZARD SCORE & STATE DETERMINATION --------------------
   
   // 1. Check for HARD CRITICAL EVENTS (Highest Priority)
-  if (ir_read <= THRESH_RADIATION_CRITICAL) {
+  // This check MUST come first. The IR reading of 941 is high, so we raised the threshold
+  // to 1000 to treat 941 as the safe baseline.
+  if (ir_read >= THRESH_RADIATION_CRITICAL) {
     currentState = STATE_RAD_LEAK; 
     hazardScore = 10;
   } 
@@ -352,6 +353,7 @@ void loop() {
     int calculatedAdditiveScore = 0;
 
     // Fire/Overheat (Score +2)
+    // Threshold is now 950.0. Since ir_read is 941.00, this should no longer trigger.
     if (ir_read >= THRESH_OVERHEAT_WARNING) { 
         calculatedAdditiveScore += 2; 
     }
@@ -367,6 +369,7 @@ void loop() {
     }
 
     // Mag Deviation (Security) (Score +1)
+    // NOTE: d_magn (2400+) is currently triggering this +1 score.
     if (d_magn >= THRESH_MAG_DEVIATION) { 
         calculatedAdditiveScore += 1; 
     }
@@ -401,16 +404,28 @@ void loop() {
   // Check for any Alert State (1, 2, 3, 4, 10)
   if (currentState != STATE_INIT && currentState != STATE_NOMINAL) { 
     
-    // --- LCD Flashing Logic (200ms cycle) - Backlight always ON ---
-    if (currentTime % flashRate < (flashRate / 2)) {  
-        lcd.setRGB(255, 0, 0); // Red 
-    } else {
-        lcd.setRGB(0, 150, 255); // Cyan/Blue 
+    // --- LCD Flashing Logic (200ms cycle) ---
+    // Critical Alerts (1, 3, 10) flash RED/CYAN
+    if (currentState == STATE_CRITICAL_CUMULATIVE || currentState == STATE_CRASH || currentState == STATE_RAD_LEAK) {
+        if (currentTime % flashRate < (flashRate / 2)) {  
+            lcd.setRGB(255, 0, 0); // Red (Alert)
+        } else {
+            lcd.setRGB(0, 150, 255); // Cyan/Blue (Backlight always ON)
+        }
+    } 
+    // Minor Alerts (4, 2) flash YELLOW/CYAN
+    else if (currentState == STATE_WARNING || currentState == STATE_FIRE) {
+         if (currentTime % flashRate < (flashRate / 2)) {  
+            lcd.setRGB(255, 255, 0); // Yellow (Warning)
+        } else {
+            lcd.setRGB(0, 150, 255); // Cyan/Blue (Backlight always ON)
+        }
     }
+
 
     // --- Buzzer Logic (SOS or short pulse) ---
     if (currentState == STATE_CRITICAL_CUMULATIVE || currentState == STATE_CRASH || currentState == STATE_RAD_LEAK) {
-        // SOS Pattern Logic...
+        // SOS Pattern Logic... (Code unchanged for brevity)
         unsigned long t = currentTime - last_buzzer_ms;
         if (t >= MORSE_SOS_CYCLE_MS) {
             last_buzzer_ms = currentTime - (t % MORSE_SOS_CYCLE_MS);
@@ -423,7 +438,7 @@ void loop() {
         } else { noTone(BUZZER_PIN); }
     } 
     else if (currentState == STATE_WARNING || currentState == STATE_FIRE) {
-        // Single Short Buzz Pattern Logic...
+        // Single Short Buzz Pattern Logic... (Code unchanged for brevity)
         unsigned long time_in_cycle = currentTime - last_buzzer_ms;
         if (time_in_cycle >= BUZZ_CYCLE_MS) {
           last_buzzer_ms = currentTime - (time_in_cycle % BUZZ_CYCLE_MS);
@@ -449,7 +464,7 @@ void loop() {
   lcd.print(current.instruction);
   
   // -------------------- E. SERIAL DEBUGGING (Runs continuously) --------------------
-  int touch_value_debug = digitalRead(TOUCH_PIN); // Re-read for current loop debug
+  int touch_value_debug = digitalRead(TOUCH_PIN); 
   Serial.println("\n--- Sensor Readings & State ---");
   Serial.print("Internal State: "); Serial.print(currentState); Serial.print(" -> "); Serial.println(current.anomaly);
   Serial.print("Logged Hazard Score (F8): "); Serial.println(hazardScore); 
@@ -467,7 +482,7 @@ void loop() {
     // --- SET UP FIELDS ---
     ThingSpeak.setField(1, ir_read);        
     ThingSpeak.setField(2, gForce_in_G);    
-    ThingSpeak.setField(3, (float)smooth_diff); // Cast double to float
+    ThingSpeak.setField(3, (float)smooth_diff); 
     ThingSpeak.setField(4, angleTilt);      
     ThingSpeak.setField(5, accel_x_in_G);   
     ThingSpeak.setField(6, true_heading);   
@@ -482,11 +497,10 @@ void loop() {
     } else {
       Serial.print("❌ Problem updating channel. HTTP error code: ");
       Serial.println(http_response_code);
+      // HTTP Error -401 means Unauthorized. This usually indicates an incorrect or revoked Write API Key.
     }
     
     // Reset the timer for the next 5-second interval
     lastThingSpeakTime = currentTime; 
   }
-
-  // NOTE: No delay here! The loop runs as fast as possible, allowing for immediate sensor/LCD updates.
 }
