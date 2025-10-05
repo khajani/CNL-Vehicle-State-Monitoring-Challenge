@@ -96,7 +96,7 @@ void setup(){
 void loop(){
 
   //IR CODE
-  //Serial.println(analogRead(IR_PIN));
+  Serial.println(analogRead(IR_PIN));
 
   //IMU CODE
   sBmx160SensorData_t Omagn, Ogyro, Oaccel;
@@ -269,7 +269,7 @@ void recordBaseline() {
     float sum = 0;
     for (int i = b*binsPerBand; i < (b+1)*binsPerBand; i++) {
       sum += vReal[i];
-      Serial.println(vReal[i]);
+      //Serial.println(vReal[i]);
     }
     baselineSpectrum[b] = sum / binsPerBand; // average magnitude for this band
   }

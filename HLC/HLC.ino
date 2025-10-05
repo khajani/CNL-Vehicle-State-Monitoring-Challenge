@@ -77,7 +77,7 @@ const int THRESH_TOUCH_BREACH         = HIGH;    // Score +1 (Binary - only one 
 const float THRESH_IR_SEVERE          = 30;  // ADJUSTED: Additive +1 (Total +3)
 const float THRESH_TILT_SEVERE        = 90.0;    // Additive +2 (Total +3)
 const double THRESH_FFT_SEVERE        = 450.0;  // Additive +2 (Total +3).
-const float THRESH_MAG_DEVIATION_SEVERE = 150.0;  // Additive +2 (Total +3)
+const float THRESH_MAG_DEVIATION_SEVERE = 250;  // Additive +2 (Total +3)
 
 // *** ADDITIVE SCORING THRESHOLD ***
 const int THRESH_SCORE_CUMULATIVE_CRITICAL = 5; // Cumulative score of 5 or more triggers SOS alert
@@ -284,6 +284,7 @@ void setup() {
   sBmx160SensorData_t Omagn, Ogyro, Oaccel;
   // Initialize home_magn to a single reading to make initial state valid
   bmx160.getAllData(&Omagn, &Ogyro, &Oaccel);
+  home_magn = sqrt(sq(Omagn.x) + sq(Omagn.y));
   Serial.println(F("BMX160 Initialized"));
   
   // LIS3MDL Init
