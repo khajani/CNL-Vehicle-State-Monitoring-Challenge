@@ -67,14 +67,14 @@ const float THRESH_FIRE_CRITICAL      = 850.0;    // Confirmed Fire/Overheat -> 
 const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> Instant Score 10 (CRASH)
 
 // WARNING ALERTS (used for additive scoring - Tier 1 point value)
-const float THRESH_IR_WARNING         = 29;    // Score +2 initially
+const float THRESH_IR_WARNING         = 27;    // Score +2 initially
 const float THRESH_TILT_WARNING       = criticalAngle; // Score +1 initially
 const double THRESH_FFT_WARNING       = 50.0; // Score +1 initially
 const float THRESH_MAG_DEVIATION      = 50.0;    // Score +1 initially
 const int THRESH_TOUCH_BREACH         = HIGH;    // Score +1 (Binary - only one tier)
 
 // NEW THRESHOLDS FOR TIERED SCORING (Tier 2: additive point value)
-const float THRESH_IR_SEVERE          = 30;  // ADJUSTED: Additive +1 (Total +3)
+const float THRESH_IR_SEVERE          = 29;  // ADJUSTED: Additive +1 (Total +3)
 const float THRESH_TILT_SEVERE        = 90.0;    // Additive +2 (Total +3)
 const double THRESH_FFT_SEVERE        = 450.0;  // Additive +2 (Total +3).
 const float THRESH_MAG_DEVIATION_SEVERE = 250;  // Additive +2 (Total +3)
@@ -82,7 +82,7 @@ const float THRESH_MAG_DEVIATION_SEVERE = 250;  // Additive +2 (Total +3)
 // *** ADDITIVE SCORING THRESHOLD ***
 const int THRESH_SCORE_CUMULATIVE_CRITICAL = 5; // Cumulative score of 5 or more triggers SOS alert
 // Minimum score required to trigger a visual/audio warning state (State 4)
-const int THRESH_SCORE_MINOR_WARNING = 3; 
+const int THRESH_SCORE_MINOR_WARNING = 2; 
 
 // --- STATE CONSTANTS (Used INTERNALLY for LCD message lookup and Alarm type) ---
 const int STATE_INIT = 0;
@@ -90,7 +90,7 @@ const int STATE_CRITICAL_CUMULATIVE = 1; // Cumulative score >= 5 (Critical)
 const int STATE_FIRE = 2;              // Hard Critical Fire Confirmed 
 const int STATE_CRASH = 3;             // Hard G-force detection (Critical)
 const int STATE_WARNING = 4;           // Any cumulative score >= 3 and < 5 (Minor)
-const int STATE_NOMINAL = 5;           // All clear (Score 0, 1, or 2)
+const int STATE_NOMINAL = 5;           // All clear (Score 0, 1)
 const int STATE_RAD_LEAK = 10;           // Hard radiation detection (Critical)
 
 
