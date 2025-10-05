@@ -14,8 +14,8 @@ char ssid[] = "KJ";
 char pass[] = "1236393639";
 
 // ThingSpeak Channel and API Key
-unsigned long myChannelNumber = 3100192; // REPLACE with final channel number
-const char * myWriteAPIKey = "BAOHBAPAYCW24D6P"; // REPLACE with final Write API Key
+unsigned long myChannelNumber = 3100192; // REPLACE with your final channel number
+const char * myWriteAPIKey = "BAOHBAPAYCW24D6P"; // REPLACE with your final Write API Key
 
 // **MAG/GPS Configuration**
 const float DECLINATION_ANGLE = 12.5; // IMPORTANT: Set this for your location's magnetic variation!
@@ -76,7 +76,7 @@ const int STATE_RAD_LEAK = 10;           // Hard radiation detection
 
 // --- BUZZER AND TOUCH SENSORS ---
 #define BUZZER_PIN 8  // Digital pin for the buzzer (D8)
-#define TOUCH_PIN 3   // Digital pin for the touch sensor (D3)
+#define TOUCH_PIN 7   // Digital pin for the touch sensor (D7)
 
 // Morse Code Timing Constants (SOS Pattern for Critical Alerts)
 const int BUZZ_FREQ = 1800; // High-pitched, urgent frequency
@@ -436,7 +436,8 @@ void loop() {
   // Individual sensor readings are logged so you can see the sequence of events.
   ThingSpeak.setField(1, ir_read);        // Field 1: IR/Radiation/Temp Analog Read (In-Box Temp)
   ThingSpeak.setField(2, gForce_in_G);    // Field 2: Total G-force (Impact, Norm of all axes)
-  ThingSpeak.setField(3, smooth_diff);    // Field 3: FFT Vibration Score
+  // FIX: Cast 'double' smooth_diff to 'float' to resolve ThingSpeak ambiguity error.
+  ThingSpeak.setField(3, (float)smooth_diff);    // Field 3: FFT Vibration Score
   ThingSpeak.setField(4, angleTilt);      // Field 4: Tilt Angle (Load Shift)
   ThingSpeak.setField(5, accel_x_in_G);   // Field 5: X-Axis Acceleration (G's) - Front/Rear Impact Component
   ThingSpeak.setField(6, true_heading);   // Field 6: True Compass Heading (Degrees)
