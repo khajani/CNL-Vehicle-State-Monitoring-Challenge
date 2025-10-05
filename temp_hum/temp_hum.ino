@@ -1,33 +1,27 @@
-#include "Arduino_SensorKit.h"
-#include <rgb_lcd.h>
-#include <Wire.h>
-#include <AHT20.h>
-AHT20 aht20;
+#include <Adafruit_AHTX0.h>
 
-void setup()
-{
+Adafruit_AHTX0 aht;
+
+void setup() {
   Serial.begin(115200);
-  Serial.println("AHT20 example");
+  Serial.println("Adafruit AHT20 Example");
 
-  Wire.begin();
-  if (aht20.begin() == false)
-  {
-    Serial.println("AHT20 not detected. Please check wiring. Freezing.");
-    while(true);
+  if (!aht.begin()) {
+    Serial.println("Could not find AHT? Check wiring");
+    while (1) delay(10);
   }
 }
 
-void loop()
-{
-  float temperature = aht20.getTemperature();
-  float humidity = aht20.getHumidity();
+void loop() {
+  sensors_event_t humidity, temp;
+  aht.getEvent(&humidity, &temp); // populate temp and humidity objects
 
-  Serial.print("T: ");
-  Serial.print(temperature, 2);
-  Serial.print(" C\t H: ");
-  Serial.print(humidity, 2);
-  Serial.println("% RH");
-
+  Serial.print("Temperature: "); 
+  Serial.print(temp.temperature); 
+  Serial.println(" °C");
+  Serial.print("Humidity: "); 
+  Serial.print(humidity.relative_humidity); 
+  Serial.println(" %");
   delay(2000);
 }
 
@@ -36,8 +30,8 @@ void loop()
 rgb_lcd lcd;
 
 // The LCD is already part of the Sensor Kit library as "Display"
-void setup() {
-  Serial.begin(115200);
+//void setup() {
+  //Serial.begin(115200);
 
   // // Start LCD
   // Display.begin();
