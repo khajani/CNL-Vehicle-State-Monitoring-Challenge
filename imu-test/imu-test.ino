@@ -22,6 +22,8 @@
 #define FREQ_THRESHOLD 50000
 #define BANDS 8
 
+#define ACCEL_THRESHOLD 1
+
 int IR_PIN = A0;
 
 //gyro variables
@@ -126,13 +128,13 @@ void loop(){
   //GYROSCOPE!!
 
     // Calculate accelerations (convert to g)
-    float accelx = Ogyro.x / 16384.0; // scale for ±2g
-    float accely = Ogyro.y / 16384.0;
-    float accelz = Ogyro.z / 16384.0;
+    float gyrox = Ogyro.x / 16384.0; // scale for ±2g
+    float gyroy = Ogyro.y / 16384.0;
+    float gyroz = Ogyro.z / 16384.0;
 
     // Convert to roll & pitch angles (degrees)
-    float roll  = atan2(accely, accelz) * 180 / PI; //tilt around x-axis
-    float pitch = atan2(-accelx, sqrt(accely * accely + accelz * accelz)) * 180 / PI; //tilt round y-axis
+    float roll  = atan2(gyroy, gyroz) * 180 / PI; //tilt around x-axis
+    float pitch = atan2(-gyrox, sqrt(gyroy * gyroy + gyroz * gyroz)) * 180 / PI; //tilt round y-axis
 
     float angleTilt= max(abs(roll), abs(pitch));
 
@@ -153,31 +155,43 @@ void loop(){
   
   //ACCELEROMETER!!
 
+    //BASIC ACCEL (FOR COLLISONS)
+      float accelx= Oaccel.x;
+      float accely = Oaccel.y;
+      float accelz = Oaccel.z;
+      float acceln = sqrt(sq(accelx) + sq(accely) + sq(accelz));
+
+      if (acceln > ACCEL_THRESHOLD) {
+        digitalWrite(LED_PIN, HIGH); //light up LED if threshold exceeded
+      } else {
+        digitalWrite(LED_PIN, LOW);
+      }
+
+    //OVERCOMPLICATED ACCEL (FOR VIBRATIONS)
+      collectSamples(); //get samples
+      runFFT(); //translate samples
+
+      double freq_diff //VAR FOR ACTUAL USAGE
+      = compareToBaseline(); //compare sample sets
+
+      const float alpha = 0.2;  // smoothing factor, 0 < alpha <= 1
+      static double smooth_diff = 0;  // remembers previous value
+      smooth_diff = alpha * freq_diff + (1 - alpha) * smooth_diff;
+
+      Serial.print(" ");
+      Serial.println(freq_diff);
+
+      //basic LED test; will be replaced with LCD code later
+      if (smooth_diff > FREQ_THRESHOLD) {
+        digitalWrite(LED_PIN, HIGH); //light up LED if threshold exceeded
+      } else {
+        digitalWrite(LED_PIN, LOW);
+      }
+
     /* Display the accelerometer results (accelerometer data is in m/s^2) */
     // Serial.print(Oaccel.x); Serial.print(" ");
     // Serial.print(Oaccel.y); Serial.print(" ");
     // Serial.print(Oaccel.z); Serial.print(" ");
-
-    //actual FFT code
-    collectSamples();
-    runFFT(); //method to analyze samples
-
-    double freq_diff //VAR FOR ACTUAL USAGE
-    = compareToBaseline(); //method to compare sample sets
-
-    const float alpha = 0.2;  // smoothing factor, 0 < alpha <= 1
-    static double smooth_diff = 0;  // remembers previous value
-    smooth_diff = alpha * freq_diff + (1 - alpha) * smooth_diff;
-
-    Serial.print(" ");
-    Serial.println(freq_diff);
-
-    //basic LED test; will be replaced with LCD code later
-    if (smooth_diff > FREQ_THRESHOLD) {
-      digitalWrite(LED_PIN, HIGH); //light up LED if threshold exceeded
-    } else {
-      digitalWrite(LED_PIN, LOW);
-    }
 
     delay(20); //change loop rate here
 }
