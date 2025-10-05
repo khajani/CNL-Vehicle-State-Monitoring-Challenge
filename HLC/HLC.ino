@@ -1,3 +1,4 @@
+// -------------------- 1. REQUIRED LIBRARIES (Full List) --------------------
 #include <WiFiS3.h>      // REQUIRED for Arduino Uno R4 WiFi networking
 #include <ThingSpeak.h>  // REQUIRED for ThingSpeak functions
 #include <Adafruit_LIS3MDL.h> // Magnetometer Library
@@ -14,8 +15,8 @@ char ssid[] = "KJ";
 char pass[] = "1236393639";
 
 // ThingSpeak Channel and API Key
-unsigned long myChannelNumber = 3100192; // REPLACE with your final channel number
-const char * myWriteAPIKey = "BAOHBAPAYCW24D6P"; // REPLACE with your final Write API Key
+unsigned long myChannelNumber = 3100192; 
+const char * myWriteAPIKey = "BAOHBAPAYCW24D6P"; 
 
 // **MAG/GPS Configuration**
 const float DECLINATION_ANGLE = 12.5; // IMPORTANT: Set this for your location's magnetic variation!
@@ -51,7 +52,7 @@ const float criticalAngle = 80.0;
 
 // *** HAZARD LEVEL CHECK (HLC) THRESHOLDS (Used for determining state and additive score) ***
 // HARD CRITICAL ALERTS
-const float THRESH_RADIATION_CRITICAL = 935.0;  // High IR reading -> Instant Score 10
+const float THRESH_RADIATION_CRITICAL = 900.0;  // High IR reading -> Instant Score 10
 const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> Instant Score 10
 // WARNING ALERTS (used for additive scoring)
 const float THRESH_OVERHEAT_WARNING   = 80.0;   // In-box Temp/IR
@@ -76,7 +77,7 @@ const int STATE_RAD_LEAK = 10;           // Hard radiation detection
 
 // --- BUZZER AND TOUCH SENSORS ---
 #define BUZZER_PIN 8  // Digital pin for the buzzer (D8)
-#define TOUCH_PIN 7   // Digital pin for the touch sensor (D7)
+#define TOUCH_PIN 3   // Digital pin for the touch sensor (D7)
 #define BUTTON_PIN 6 // Digital pin for baseline re-record button
 
 // Morse Code Timing Constants (SOS Pattern for Critical Alerts)
@@ -109,7 +110,7 @@ TestState states[] = {
   // Index 3: STATE_CRASH 
   {"CRASH! DANGER!", "STOP, CALL CNL"},
   // Index 4: STATE_WARNING (Generic minor warning)
-  {"MINOR WARNING", "CHECK TELEMETRY"},
+  {"MINOR WARNING", "CAUTION"},
   // Index 5: STATE_NOMINAL 
   {"SYSTEM NEUTRAL", "ALL SYSTEMS OK"},
   // Index 6: STATE_RAD_LEAK 
@@ -119,6 +120,11 @@ TestState states[] = {
 int currentState = STATE_INIT;      // Starts in State 0 (Initializing)
 int hazardScore = 0;                // Value logged to Field 8 (0-6, or 10)
 const int flashRate = 200;          // milliseconds for the LCD flash cycle
+
+// --- NON-BLOCKING TIMER VARIABLES ---
+const unsigned long THINGSPEAK_INTERVAL_MS = 5000; // New 5-second update interval
+unsigned long lastThingSpeakTime = 0;
+// ------------------------------------
 
 // -------------------- 4. HLC (Hazard Level Check) LOGIC --------------------
 
@@ -195,9 +201,7 @@ double compareToBaseline() {
     }
     float liveAvg = sum / binsPerBand;
     float delta = liveAvg - baselineSpectrum[b];
-    // NOTE: Reverting this back to delta * delta (Sum of Squares)
-    // Sum of squares is the standard way to calculate spectral energy difference
-    // to prevent positive/negative deltas from cancelling out.
+    // Using Sum of Squares for spectral energy difference
     diff += delta * delta; 
   }
   return diff;
@@ -221,16 +225,19 @@ void connectToWiFi() {
 
 // -------------------- 7. SETUP FUNCTION --------------------
 void setup() {
+  // Set Serial Baud Rate
   Serial.begin(115200); 
+  
+  // LCD Setup
   lcd.begin(16, 2);
   lcd.setRGB(100, 100, 255); 
   lcd.home(); lcd.print(states[STATE_INIT].anomaly);
   lcd.setCursor(0, 1); lcd.print(states[STATE_INIT].instruction);
   
-  // Set up Buzzer, Touch, and Button Pins
+  // Set up Pins
   pinMode(BUZZER_PIN, OUTPUT);
   pinMode(TOUCH_PIN, INPUT);
-  pinMode(BUTTON_PIN, INPUT); // Teammate's addition
+  pinMode(BUTTON_PIN, INPUT); 
   
   // IMU INIT (BMX160)
   if (bmx160.begin() != true){
@@ -240,7 +247,7 @@ void setup() {
   }
   Serial.println(F("BMX160 Initialized"));
   
-  // LIS3MDL Init (as requested, though BMX160 is the main source)
+  // LIS3MDL Init
   if (!lis3mdl.begin_I2C()) {
     Serial.println("LIS3MDL Init FAILED! (Secondary Mag)");
   }
@@ -255,13 +262,12 @@ void setup() {
   connectToWiFi();
   ThingSpeak.begin(client);
 
-  // --- IR SENSOR STABILIZATION FIX ---
-  // FIX: Perform 10 dummy analog reads to stabilize the sensor and the ADC
-  // and prevent an immediate false "RAD. LEAK!" alarm on boot.
+  // --- IR SENSOR STABILIZATION ---
+  // Stabilizes the sensor to prevent an immediate false "RAD. LEAK!" alarm on boot.
   Serial.println(F("Stabilizing IR Sensor..."));
   for(int i = 0; i < 10; i++) {
     analogRead(IR_PIN); 
-    delay(10); // Small delay between reads
+    delay(10); 
   }
   Serial.print(F("Initial stabilized IR Reading: ")); 
   Serial.println(analogRead(IR_PIN));
@@ -279,14 +285,13 @@ void loop() {
   }
 
   // --- Check for Manual Baseline Re-record ---
-  // Pressing the button will re-run the FFT baseline sequence
   if (digitalRead(BUTTON_PIN) == HIGH) { 
       Serial.println(F("Button pressed! Re-recording baseline..."));
       lcd.setRGB(255, 100, 0); lcd.home(); lcd.print("RE-RECORDING");
       lcd.setCursor(0, 1); lcd.print("FFT BASELINE");
       recordBaseline();
-      currentState = STATE_NOMINAL; // Reset state after re-record
-      delay(2000); // Debounce and show message
+      currentState = STATE_NOMINAL; 
+      delay(2000); 
   }
   
   // -------------------- A. SENSOR READS & PROCESSING --------------------
@@ -302,7 +307,7 @@ void loop() {
   // 2. IMPACT / CRASH (ACCEL)
   float accel_raw_norm = sqrt(sq(Oaccel.x) + sq(Oaccel.y) + sq(Oaccel.z));
   float gForce_in_G = accel_raw_norm / 16384.0; // Convert raw LSB to G's
-  float accel_x_in_G = Oaccel.x / 16384.0; // X-Axis component in G's (for F5)
+  float accel_x_in_G = Oaccel.x / 16384.0; 
 
   // 3. VIBRATION / INTEGRITY (FFT)
   collectSamples();
@@ -315,7 +320,7 @@ void loop() {
   // 4. MAGNETOMETER (SECURITY)
   float magx = Omagn.x;
   float magy = Omagn.y; 
-  float magn = sqrt(sq(magx) + sq(magy)); // Using 2D norm for deviation in transit is often sufficient
+  float magn = sqrt(sq(magx) + sq(magy)); 
   float d_magn = abs(magn - home_magn); // Deviation score
   
   // 5. IR / EXTERNAL SENSOR (FIRE/RADIATION/TEMP)
@@ -389,57 +394,43 @@ void loop() {
     }
   }
   
-  // -------------------- D. LCD & BUZZER DISPLAY LOGIC --------------------
+  // -------------------- D. LCD & BUZZER DISPLAY LOGIC (Runs continuously) --------------------
   TestState current = states[getDisplayIndex(currentState)]; // Get display text
   static unsigned long last_buzzer_ms = 0; 
 
   // Check for any Alert State (1, 2, 3, 4, 10)
   if (currentState != STATE_INIT && currentState != STATE_NOMINAL) { 
     
-    // --- LCD Flashing Logic (200ms cycle) ---
-    // FIX: Backlight stays ON. Flashing between Red and Cyan (instead of Red and OFF).
+    // --- LCD Flashing Logic (200ms cycle) - Backlight always ON ---
     if (currentTime % flashRate < (flashRate / 2)) {  
-        lcd.setRGB(255, 0, 0); // Red (Critical Alert)
+        lcd.setRGB(255, 0, 0); // Red 
     } else {
-        lcd.setRGB(0, 150, 255); // Cyan/Blue (Still ON, but less alarming color)
+        lcd.setRGB(0, 150, 255); // Cyan/Blue 
     }
 
-    // --- Buzzer Logic ---
-    // Critical SOS Alarm: STATES 1 (CUMULATIVE), 3 (CRASH), and 10 (RAD LEAK)
+    // --- Buzzer Logic (SOS or short pulse) ---
     if (currentState == STATE_CRITICAL_CUMULATIVE || currentState == STATE_CRASH || currentState == STATE_RAD_LEAK) {
-        // SOS Pattern
+        // SOS Pattern Logic...
         unsigned long t = currentTime - last_buzzer_ms;
         if (t >= MORSE_SOS_CYCLE_MS) {
             last_buzzer_ms = currentTime - (t % MORSE_SOS_CYCLE_MS);
             t = currentTime - last_buzzer_ms;
         }
-
-        // SOS timing logic (S.O.S)
         if ( (t >= 0 && t < MORSE_DOT_MS) || (t >= 200 && t < 300) || (t >= 400 && t < 500) || 
              (t >= 800 && t < 1100) || (t >= 1200 && t < 1500) || (t >= 1600 && t < 1900) || 
              (t >= 2200 && t < 2300) || (t >= 2400 && t < 2500) || (t >= 2600 && t < 2700) ) {
             tone(BUZZER_PIN, BUZZ_FREQ); 
-        }
-        else {
-            noTone(BUZZER_PIN);
-        }
+        } else { noTone(BUZZER_PIN); }
     } 
-    // Single Short Buzz: STATE 4 (MINOR WARNING) or STATE 2 (FIRE)
     else if (currentState == STATE_WARNING || currentState == STATE_FIRE) {
-        // Single Short Buzz pattern (100ms tone, 400ms silence)
+        // Single Short Buzz Pattern Logic...
         unsigned long time_in_cycle = currentTime - last_buzzer_ms;
-
         if (time_in_cycle >= BUZZ_CYCLE_MS) {
           last_buzzer_ms = currentTime - (time_in_cycle % BUZZ_CYCLE_MS);
           time_in_cycle = currentTime - last_buzzer_ms; 
         }
-
-        if (time_in_cycle < BUZZ_PULSE_MS) { 
-            tone(BUZZER_PIN, BUZZ_FREQ); 
-        }
-        else {
-            noTone(BUZZER_PIN);
-        }
+        if (time_in_cycle < BUZZ_PULSE_MS) { tone(BUZZER_PIN, BUZZ_FREQ); }
+        else { noTone(BUZZER_PIN); }
     } 
   } 
   // Fixed GREEN for NOMINAL (State 5) - BUZZER OFF
@@ -457,36 +448,45 @@ void loop() {
   lcd.setCursor(0, 1);
   lcd.print(current.instruction);
   
-  // -------------------- E. THINGSPEAK SEND --------------------
-  
-  // --- SET UP FIELDS ---
-  ThingSpeak.setField(1, ir_read);        // Field 1: IR/Radiation/Temp Analog Read (In-Box Temp)
-  ThingSpeak.setField(2, gForce_in_G);    // Field 2: Total G-force (Impact, Norm of all axes)
-  ThingSpeak.setField(3, (float)smooth_diff);    // Field 3: FFT Vibration Score (Casting double to float fix)
-  ThingSpeak.setField(4, angleTilt);      // Field 4: Tilt Angle (Load Shift)
-  ThingSpeak.setField(5, accel_x_in_G);   // Field 5: X-Axis Acceleration (G's) - Front/Rear Impact Component
-  ThingSpeak.setField(6, true_heading);   // Field 6: True Compass Heading (Degrees)
-  ThingSpeak.setField(7, d_magn);         // Field 7: Mag Deviation (Security)
-  ThingSpeak.setField(8, hazardScore);    // Field 8: The final Hazard Score (0-6, or 10 for critical)
-  
-  // Print to Serial for debugging
-  Serial.println("\n--- TELLIGENCE Status ---");
+  // -------------------- E. SERIAL DEBUGGING (Runs continuously) --------------------
+  int touch_value_debug = digitalRead(TOUCH_PIN); // Re-read for current loop debug
+  Serial.println("\n--- Sensor Readings & State ---");
   Serial.print("Internal State: "); Serial.print(currentState); Serial.print(" -> "); Serial.println(current.anomaly);
   Serial.print("Logged Hazard Score (F8): "); Serial.println(hazardScore); 
   Serial.print("F1 (IR/Temp): "); Serial.println(ir_read);
   Serial.print("F2 (gForce Norm): "); Serial.println(gForce_in_G);
   Serial.print("F3 (FFT Score): "); Serial.println(smooth_diff);
-  Serial.print("Touch State: "); Serial.println(touch_value); // Added for debugging
-  
-  // WRITE DATA TO THINGSPEAK
-  int http_response_code = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
+  Serial.print("F4 (Tilt): "); Serial.println(angleTilt);
+  Serial.print("F7 (Mag Dev): "); Serial.println(d_magn);
+  Serial.print("Touch State: "); Serial.println(touch_value_debug); 
 
-  if (http_response_code == 200) {
-    Serial.println("✅ Data sent successfully! (HTTP 200)");
-  } else {
-    Serial.print("❌ Problem updating channel. HTTP error code: ");
-    Serial.println(http_response_code);
+
+  // -------------------- F. THINGSPEAK SEND (Runs every 5 seconds) --------------------
+  if (currentTime - lastThingSpeakTime >= THINGSPEAK_INTERVAL_MS) {
+
+    // --- SET UP FIELDS ---
+    ThingSpeak.setField(1, ir_read);        
+    ThingSpeak.setField(2, gForce_in_G);    
+    ThingSpeak.setField(3, (float)smooth_diff); // Cast double to float
+    ThingSpeak.setField(4, angleTilt);      
+    ThingSpeak.setField(5, accel_x_in_G);   
+    ThingSpeak.setField(6, true_heading);   
+    ThingSpeak.setField(7, d_magn);         
+    ThingSpeak.setField(8, hazardScore);    
+    
+    // WRITE DATA TO THINGSPEAK
+    int http_response_code = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
+
+    if (http_response_code == 200) {
+      Serial.println("✅ Data sent successfully! (HTTP 200)");
+    } else {
+      Serial.print("❌ Problem updating channel. HTTP error code: ");
+      Serial.println(http_response_code);
+    }
+    
+    // Reset the timer for the next 5-second interval
+    lastThingSpeakTime = currentTime; 
   }
 
-  delay(20000); // 20-second update cycle
+  // NOTE: No delay here! The loop runs as fast as possible, allowing for immediate sensor/LCD updates.
 }
