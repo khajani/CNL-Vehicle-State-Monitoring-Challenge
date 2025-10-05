@@ -67,7 +67,7 @@ const float THRESH_FIRE_CRITICAL      = 850.0;    // Confirmed Fire/Overheat -> 
 const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> Instant Score 10 (CRASH)
 
 // WARNING ALERTS (used for additive scoring - Tier 1 point value)
-const float THRESH_IR_WARNING         = 30;    // Score +2 initially
+const float THRESH_IR_WARNING         = 29;    // Score +2 initially
 const float THRESH_TILT_WARNING       = criticalAngle; // Score +1 initially
 const double THRESH_FFT_WARNING       = 50.0; // Score +1 initially
 const float THRESH_MAG_DEVIATION      = 50.0;    // Score +1 initially
