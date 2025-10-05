@@ -25,7 +25,10 @@
 #define ACCEL_THRESHOLD 1
 
 int IR_PIN = A0;
-int BUTTON_PIN = 7;
+int BUTTON_PIN = 6;
+
+int buttonState = 0;
+int lastButtonState = 0;
 
 //gyro variables
 const float warningAngle=50;
@@ -61,9 +64,7 @@ void setup(){
   }
   Serial.println(F("imu initialized"));
 
-  Serial.println(F("recording baseline"));
   recordBaseline(); //method to obtain baseline data set + put in buffer
-  Serial.println(F("baseline recorded"));
 
   //bunch of config stuff, keeping for potential later use
 
@@ -193,14 +194,21 @@ void loop(){
         digitalWrite(LED_PIN, LOW);
       }
 
-      Serial.print(digitalRead(BUTTON_PIN));
+      buttonState = digitalRead(BUTTON_PIN);
+
+      if (buttonState == LOW && lastButtonState == HIGH) {
+        recordBaseline();
+      }
+
+      lastButtonState = buttonState;
+      //Serial.print(digitalRead(BUTTON_PIN));
 
     /* Display the accelerometer results (accelerometer data is in m/s^2) */
     // Serial.print(Oaccel.x); Serial.print(" ");
     // Serial.print(Oaccel.y); Serial.print(" ");
     // Serial.print(Oaccel.z); Serial.print(" ");
 
-    delay(20); //change loop rate here
+    delay(100); //change loop rate here
 }
 
 //method to 
@@ -247,6 +255,9 @@ void runFFT() {
 
 void recordBaseline() {
   //get and convert samples
+
+  Serial.println(F("recording baseline"));
+
   collectSamples();
   runFFT();
 
@@ -257,12 +268,14 @@ void recordBaseline() {
     float sum = 0;
     for (int i = b*binsPerBand; i < (b+1)*binsPerBand; i++) {
       sum += vReal[i];
+      Serial.println(vReal[i]);
     }
     baselineSpectrum[b] = sum / binsPerBand; // average magnitude for this band
   }
 
   //say that baseline is now filled 
   baselineSet = true;
+  Serial.println(F("baseline recorded"));
 }
 
 //compare live set of data to baseline

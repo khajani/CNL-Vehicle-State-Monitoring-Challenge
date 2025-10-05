@@ -20,7 +20,7 @@ const char * myWriteAPIKey = "NWU0RZBT5OC4183A"; // REPLACE with your final Writ
 // **MAG/GPS Configuration**
 const float DECLINATION_ANGLE = 12.5; // IMPORTANT: Set this for your location's magnetic variation!
 // *** CALIBRATION FIX: Updated baseline to match current readings (~2250.0) ***
-const float home_magn = 2250.0;    // Magnetometer baseline Norm (Used for deviation comparison)
+float home_magn = 0;    // Magnetometer baseline Norm (Used for deviation comparison)
 
 // -------------------- 3. GLOBAL SYSTEM & SENSOR DEFS & THRESHOLDS --------------------
 WiFiClient client;
@@ -245,6 +245,10 @@ void setup() {
     lcd.setRGB(255, 0, 0); lcd.home(); lcd.print("BMX160 FAIL!");
     while(1);
   }
+
+  sBmx160SensorData_t Omagn, Ogyro, Oaccel;
+  bmx160.getAllData(&Omagn, &Ogyro, &Oaccel);
+  home_magn = sqrt(sq(Omagn.x) + sq(Omagn.y)); 
   Serial.println(F("BMX160 Initialized"));
   
   // LIS3MDL Init
@@ -309,8 +313,8 @@ void loop() {
 
   // 2. IMPACT / CRASH (ACCEL)
   float accel_raw_norm = sqrt(sq(Oaccel.x) + sq(Oaccel.y) + sq(Oaccel.z));
-  float gForce_in_G = accel_raw_norm / 16384.0; // Convert raw LSB to G's
-  float accel_x_in_G = Oaccel.x / 16384.0; 
+  float gForce_in_G = accel_raw_norm;// / 16384.0; // Convert raw LSB to G's
+  float accel_x_in_G = Oaccel.x;// / 16384.0; 
 
   // 3. VIBRATION / INTEGRITY (FFT)
   collectSamples();
