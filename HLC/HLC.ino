@@ -1,9 +1,12 @@
 #include <WiFiS3.h>      // REQUIRED for Arduino Uno R4 WiFi networking
-#include <ThingSpeak.h>  // REQUIRED for ThingSpeak functions
+#include <ThingSpeak.h.h>  // REQUIRED for ThingSpeak functions
 #include <Adafruit_LIS3MDL.h> // Magnetometer Library
 #include <Adafruit_Sensor.h>  // Unified Sensor Library
 #include <Wire.h>        // REQUIRED for I2C
 #include <rgb_lcd.h>     // REQUIRED for LCD
+
+// NEW: DHT Sensor Library
+#include <DHT.h>
 
 // Your Team's Libraries for Sensor Processing
 #include <DFRobot_BMX160.h>
@@ -31,6 +34,13 @@ DFRobot_BMX160 bmx160;
 rgb_lcd lcd;               
 Adafruit_LIS3MDL lis3mdl; 
 
+// NEW: DHT SENSOR DEFINITION
+#define DHT_PIN 4
+#define DHT_TYPE DHT22 // Assuming DHT22 for better precision (change to DHT11 if required)
+DHT dht(DHT_PIN, DHT_TYPE);
+float temperature_c = 0.0; // F2
+float humidity = 0.0;      // Read locally, but not logged to ThingSpeak
+
 // FFT CONFIGURATION
 #define SAMPLES 256
 #define SAMPLE_FREQ 400
@@ -39,7 +49,7 @@ Adafruit_LIS3MDL lis3mdl;
 
 // FFT BUFFERS
 float vReal[SAMPLES];
-float vImag[SAMPLES];
+float vImag[SABLES];
 ArduinoFFT<float> FFT = ArduinoFFT<float>(vReal, vImag, SAMPLES, SAMPLE_FREQ);
 
 // BASELINE DATA
@@ -51,28 +61,36 @@ const float gyro_scale_factor = 16384.0; // Scaling factor for +/-2G range
 const float criticalAngle = 80.0;
 
 // *** HAZARD LEVEL CHECK (HLC) THRESHOLDS (Used for determining state and additive score) ***
-// HARD CRITICAL ALERTS
-const float THRESH_RADIATION_CRITICAL = 1000.0;  // High IR reading -> Instant Score 10 (RAD_LEAK)
-const float THRESH_FIRE_CRITICAL      = 980.0;    // NEW: Confirmed Fire/Overheat -> Instant Score 10 (FIRE)
+// HARD CRITICAL ALERTS (These cause an immediate State 10 response)
+const float THRESH_RADIATION_CRITICAL = 900.0;  // High IR reading -> Instant Score 10 (RAD_LEAK)
+const float THRESH_FIRE_CRITICAL      = 850.0;    // Confirmed Fire/Overheat -> Instant Score 10 (FIRE)
 const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> Instant Score 10 (CRASH)
 
-// WARNING ALERTS (used for additive scoring)
-const float THRESH_OVERHEAT_WARNING   = 950.0;   // Possible Overheat/Fire (Score +2)
-const float THRESH_TILT_WARNING       = criticalAngle; // Score +1
-const double THRESH_FFT_WARNING       = 15; // Score +1
-const float THRESH_MAG_DEVIATION      = 150.0;   // Score +1
-const int THRESH_TOUCH_BREACH         = HIGH;   // Score +1
+// WARNING ALERTS (used for additive scoring - Tier 1 point value)
+const float THRESH_IR_WARNING         = 800.0;   // Score +2 initially
+const float THRESH_TILT_WARNING       = criticalAngle; // Score +1 initially
+const double THRESH_FFT_WARNING       = 50.0; // Score +1 initially
+const float THRESH_MAG_DEVIATION      = 50.0;   // Score +1 initially
+const int THRESH_TOUCH_BREACH         = HIGH;   // Score +1 (Binary - only one tier)
+
+// NEW THRESHOLDS FOR TIERED SCORING (Tier 2: additive point value)
+const float THRESH_IR_SEVERE          = 825.0;  // ADDED: Additive +2 (Total +4)
+const float THRESH_TILT_SEVERE        = 90.0;   // Additive +2 (Total +3)
+const double THRESH_FFT_SEVERE        = 450.0;  // Additive +2 (Total +3).
+const float THRESH_MAG_DEVIATION_SEVERE = 150.0;  // Additive +2 (Total +3)
 
 // *** ADDITIVE SCORING THRESHOLD ***
 const int THRESH_SCORE_CUMULATIVE_CRITICAL = 5; // Cumulative score of 5 or more triggers SOS alert
+// Minimum score required to trigger a visual/audio warning state (State 4)
+const int THRESH_SCORE_MINOR_WARNING = 3; 
 
 // --- STATE CONSTANTS (Used INTERNALLY for LCD message lookup and Alarm type) ---
 const int STATE_INIT = 0;
 const int STATE_CRITICAL_CUMULATIVE = 1; // Cumulative score >= 5 (Critical)
 const int STATE_FIRE = 2;                // Hard Critical Fire Confirmed 
 const int STATE_CRASH = 3;               // Hard G-force detection (Critical)
-const int STATE_WARNING = 4;             // Any cumulative score > 0 and < 5 (Minor)
-const int STATE_NOMINAL = 5;             // All clear (Score 0)
+const int STATE_WARNING = 4;             // Any cumulative score >= 3 and < 5 (Minor)
+const int STATE_NOMINAL = 5;             // All clear (Score 0, 1, or 2)
 const int STATE_RAD_LEAK = 10;           // Hard radiation detection (Critical)
 
 
@@ -150,7 +168,8 @@ void collectSamples() {
   
   for (int i = 0; i < SAMPLES; i++) {
     unsigned long tStart = micros();
-    bmx160.getAllData(&Omagn, &Ogyro, &Oaccel); 
+    // NOTE: DFRobot library usage.
+    bmx160.getAllData(&Omagn, Ogyro, Oaccel); 
 
     // Use Z and Y axis for vibration samples
     vReal[i] = sqrt(
@@ -240,6 +259,10 @@ void setup() {
   pinMode(TOUCH_PIN, INPUT);
   pinMode(BUTTON_PIN, INPUT); 
   
+  // DHT Sensor Init
+  dht.begin();
+  Serial.println(F("DHT Sensor Initialized."));
+
   // IMU INIT (BMX160)
   if (bmx160.begin() != true){
     Serial.println(F("BMX160 INIT FAILED!"));
@@ -250,9 +273,6 @@ void setup() {
   sBmx160SensorData_t Omagn, Ogyro, Oaccel;
   // Initialize home_magn to a single reading to make initial state valid
   bmx160.getAllData(&Omagn, &Ogyro, &Oaccel);
-  // *** NOTE: home_magn calculation was removed as it's unsafe in a moving setup. 
-  // We leave it at 0.0, or you can uncomment the line below after static calibration.
-  home_magn = sqrt(sq(Omagn.x) + sq(Omagn.y));
   Serial.println(F("BMX160 Initialized"));
   
   // LIS3MDL Init
@@ -267,7 +287,6 @@ void setup() {
   Serial.println(F("Baseline Recorded."));
   
   // Calibration Note
-
   Serial.print(F("Current Magnetic Baseline (home_magn) set to: "));
   Serial.println(home_magn);
 
@@ -318,9 +337,8 @@ void loop() {
 
   // 2. IMPACT / CRASH (ACCEL)
   float accel_raw_norm = sqrt(sq(Oaccel.x) + sq(Oaccel.y) + sq(Oaccel.z));
-  // *** CRITICAL FIX: Divide by 16384.0 to convert raw LSB value to G's ***
+  // Convert raw LSB value to G's
   float gForce_in_G = accel_raw_norm / 16384.0; 
-  float accel_x_in_G = Oaccel.x / 16384.0; 
 
   // 3. VIBRATION / INTEGRITY (FFT)
   collectSamples();
@@ -342,6 +360,16 @@ void loop() {
   // 6. TOUCH SENSOR (SECURITY)
   int touch_value = digitalRead(TOUCH_PIN);
   
+  // 7. TEMP/HUMIDITY SENSOR (New DHT)
+  float new_humidity = dht.readHumidity();
+  float new_temp_c = dht.readTemperature();
+
+  // Check if any reads failed and use the previous value if they did.
+  if (!isnan(new_humidity) && !isnan(new_temp_c)) {
+    temperature_c = new_temp_c;
+    humidity = new_humidity;
+  }
+  
   // --- HEADING CALCULATION (Sent to F6) ---
   float raw_heading = atan2(magy, magx) * 180.0 / PI;
   float true_heading = raw_heading + DECLINATION_ANGLE;
@@ -360,7 +388,7 @@ void loop() {
     currentState = STATE_CRASH;
     hazardScore = 10;
   } 
-  // NEW: Confirmed Fire Check (IR is above 980.0) -> Flashing Red
+  // Confirmed Fire Check (IR is above 850.0) -> Flashing Red
   else if (ir_read >= THRESH_FIRE_CRITICAL) { 
     currentState = STATE_FIRE;
     hazardScore = 10;
@@ -369,46 +397,85 @@ void loop() {
     // 2. Calculate Additive Score for all remaining warnings (Minor/Major)
     int calculatedAdditiveScore = 0;
 
-    // Possible Fire/Overheat (Score +2) - This will lead to STATE_WARNING (Solid Yellow)
-    if (ir_read >= THRESH_OVERHEAT_WARNING) { 
-        calculatedAdditiveScore += 2; 
-    }
+    Serial.println("\n--- Additive Score Breakdown ---");
 
-    // Tilt (Load Shift) (Score +1)
-    if (angleTilt >= THRESH_TILT_WARNING) { 
-        calculatedAdditiveScore += 1; 
+    // === TIER 1: IR Overheat/Fire (Score +2 OR +4 - Highly Additive) ===
+    int ir_contribution = 0;
+    if (ir_read >= THRESH_IR_WARNING) { 
+        ir_contribution += 2; 
+        Serial.println("  [+2] IR Overheat/Fire Warning (IR >= 800.0) - Base Score");
     }
+    if (ir_read >= THRESH_IR_SEVERE) { 
+        ir_contribution += 2; // Adds two more points for reaching severe level (825.0)
+        Serial.println("  [+2] IR Overheat/Fire (SEVERE: IR >= 825.0) - Additional Score (Total +4)");
+    }
+    calculatedAdditiveScore += ir_contribution;
+    
+    // === TIER 2: Tilt (Load Shift) (Score +1 OR +3 - Additive) ===
+    int tilt_contribution = 0;
+    if (angleTilt >= THRESH_TILT_WARNING) {
+        tilt_contribution += 1;
+        Serial.println("  [+1] Tilt/Load Shift Warning (Angle >= 80.0 deg)");
+    }
+    if (angleTilt >= THRESH_TILT_SEVERE) {
+        tilt_contribution += 2; // Adds two more points for reaching severe level
+        Serial.println("  [+2] Tilt/Load Shift (SEVERE: Angle >= 90.0 deg) - Additional Score (Total +3)");
+    }
+    calculatedAdditiveScore += tilt_contribution;
 
-    // Vibration (Score +1)
+
+    // === TIER 3: Vibration (Score +1 OR +3 - Additive) ===
+    int fft_contribution = 0;
     if (smooth_diff >= THRESH_FFT_WARNING) { 
-        calculatedAdditiveScore += 1; 
+        fft_contribution += 1; 
+        Serial.println("  [+1] Vibration/Integrity Warning (FFT >= 50.0)");
     }
+    if (smooth_diff >= THRESH_FFT_SEVERE) { 
+        fft_contribution += 2; // Adds two more points for reaching severe level
+        Serial.println("  [+2] Vibration/Integrity (SEVERE: FFT >= 450.0) - Additional Score (Total +3)");
+    }
+    calculatedAdditiveScore += fft_contribution;
 
-    // Mag Deviation (Security) (Score +1)
+    
+    // === TIER 4: Mag Deviation (Security) (Score +1 OR +3 - Additive) ===
+    int mag_contribution = 0;
     if (d_magn >= THRESH_MAG_DEVIATION) { 
-        calculatedAdditiveScore += 1; 
+        mag_contribution += 1; 
+        Serial.println("  [+1] Magnetic Deviation Warning (Mag Dev >= 50.0)");
     }
+    if (d_magn >= THRESH_MAG_DEVIATION_SEVERE) { 
+        mag_contribution += 2; // Adds two more points for reaching severe level
+        Serial.println("  [+2] Magnetic Deviation (SEVERE: Mag Dev >= 150.0) - Additional Score (Total +3)");
+    }
+    calculatedAdditiveScore += mag_contribution;
 
-    // Touch Breach (Security) (Score +1)
+
+    // === TIER 5: Touch Breach (Fixed +1) ===
+    // Touch is a binary sensor (On/Off)
     if (touch_value == THRESH_TOUCH_BREACH) { 
         calculatedAdditiveScore += 1; 
+        Serial.println("  [+1] Touch Breach Warning (Touch HIGH)");
     }
+
+    Serial.print("  Current Total Score: "); Serial.println(calculatedAdditiveScore);
+    Serial.println("------------------------------");
 
     // 3. Determine State based on Cumulative Score
     if (calculatedAdditiveScore >= THRESH_SCORE_CUMULATIVE_CRITICAL) {
-      // Multiple warnings reached critical mass 
+      // Multiple warnings reached critical mass (Score 5+)
       currentState = STATE_CRITICAL_CUMULATIVE;
-      hazardScore = 10;
+      hazardScore = 10; // Logged as 10 for a critical event
     } 
-    else if (calculatedAdditiveScore > 0) {
-      // Minor warning(s) active (Score 1-4)
+    // Check if score is high enough for a MINOR WARNING (3 or 4)
+    else if (calculatedAdditiveScore >= THRESH_SCORE_MINOR_WARNING) {
+      // Minor warning(s) active (Score 3 or 4)
       currentState = STATE_WARNING; // Triggers SOLID YELLOW
-      hazardScore = calculatedAdditiveScore;
+      hazardScore = calculatedAdditiveScore; // Log the actual score (3 or 4)
     } 
     else {
-      // All clear
+      // All clear, or insufficient score for a visual warning (scores 0, 1, or 2 are considered Nominal state)
       currentState = STATE_NOMINAL; // Triggers SOLID GREEN
-      hazardScore = 0;
+      hazardScore = calculatedAdditiveScore; // Log the raw score (0, 1, or 2)
     }
   }
   
@@ -481,13 +548,18 @@ void loop() {
   Serial.println("\n--- Sensor Readings & State ---");
   Serial.print("Internal State: "); Serial.print(currentState); Serial.print(" -> "); Serial.println(current.anomaly);
   Serial.print("Logged Hazard Score (F8): "); Serial.print(hazardScore);
-  if (hazardScore > 0) Serial.println(" (CALIBRATE or CHECK WIRING!)");
+  
+  // More specific messaging based on the new logic
+  if (hazardScore == 10) Serial.println(" (CRITICAL RISK: SOS TRIGGERED!)");
+  else if (hazardScore >= THRESH_SCORE_MINOR_WARNING) Serial.println(" (MINOR WARNING: Yellow Alert Active)");
+  else if (hazardScore > 0) Serial.println(" (Minor Fluctuation: Check readings in ThingSpeak)");
   else Serial.println(" (All Clear)");
 
-  Serial.print("F1 (IR/Temp): "); Serial.println(ir_read);
-  Serial.print("F2 (gForce Norm): "); Serial.println(gForce_in_G);
+  Serial.print("F1 (IR/Rad): "); Serial.println(ir_read);
+  Serial.print("F2 (Temp C): "); Serial.println(temperature_c);
   Serial.print("F3 (FFT Score): "); Serial.println(smooth_diff);
   Serial.print("F4 (Tilt): "); Serial.println(angleTilt);
+  Serial.print("F5 (G-Force): "); Serial.println(gForce_in_G); // Re-added G-Force logging
   Serial.print("F7 (Mag Dev): "); Serial.println(d_magn);
   Serial.print("Touch State (D3): "); Serial.println(touch_value_debug); 
 
@@ -497,10 +569,10 @@ void loop() {
 
     // --- SET UP FIELDS ---
     ThingSpeak.setField(1, ir_read);        
-    ThingSpeak.setField(2, gForce_in_G);    
+    ThingSpeak.setField(2, temperature_c);    // F2: Temperature ONLY
     ThingSpeak.setField(3, (float)smooth_diff); 
     ThingSpeak.setField(4, angleTilt);      
-    ThingSpeak.setField(5, accel_x_in_G);   
+    ThingSpeak.setField(5, gForce_in_G);      // F5: G-Force Norm (re-added for monitoring)
     ThingSpeak.setField(6, true_heading);   
     ThingSpeak.setField(7, d_magn);         
     ThingSpeak.setField(8, hazardScore);    
