@@ -16,26 +16,24 @@
 #include <arduinoFFT.h>
 
 //FFT configuration
-#define SAMPLES 512
+#define SAMPLES 256
 #define SAMPLE_FREQ 400
 #define LED_PIN 13
 #define FREQ_THRESHOLD 50000
+#define BANDS 8
 
 int IR_PIN = A0;
 
-//magnetometer variables
-float magx = 0; float magy = 0; float magz = 0; float magn = 0;
-
-float home_magx = 160; float home_magy = -30; float home_magz = -620; float home_magn = 640;
-float mag_threshold = 20;
-
-float d_magx = 0; float d_magy = 0; float d_magz = 0; float d_magn = 0;
+//gyro variables
+const float warningAngle=50;
+const float criticalAngle=80;
 
 
 //object inits
 DFRobot_BMX160 bmx160;
 
 //create buffers to store sensor data in memory
+
 float vReal[SAMPLES];   // Real part of signal (accelerometer samples)
 float vImag[SAMPLES];   // Imaginary part (all zeros for real input)
 /*fft uses real and imaginary component of inputted data; we don't have an imaginary
@@ -45,8 +43,7 @@ component so thats just all zeroes*/
 ArduinoFFT<float> FFT = ArduinoFFT<float>(vReal, vImag, SAMPLES, SAMPLE_FREQ);
 
 //baseline good condition spectrum
-float baselineSpectrum[SAMPLES/2];
-//uses samples/2 because half the data is a mirror or smth idk why vReal doesnt do this tbh lol
+float baselineSpectrum[BANDS];
 bool baselineSet = false; //indicates if theres a basline set stored
 
 void setup(){
@@ -55,14 +52,14 @@ void setup(){
 
   //init the hardware bmx160  
   if (bmx160.begin() != true){
-    Serial.println("imu init false");
+    Serial.println(F("imu init false"));
     while(1);
   }
-  Serial.println("imu initialized");
+  Serial.println(F("imu initialized"));
 
-  Serial.println("recording baseline");
+  Serial.println(F("recording baseline"));
   recordBaseline(); //method to obtain baseline data set + put in buffer
-  Serial.println("baseline recorded");
+  Serial.println(F("baseline recorded"));
 
   //bunch of config stuff, keeping for potential later use
 
@@ -103,16 +100,22 @@ void loop(){
   bmx160.getAllData(&Omagn, &Ogyro, &Oaccel);
 
   //MAGNETOMETER!!!
-    //get magnetometer results
-    magx= Omagn.x;
-    magy = Omagn.y;
-    magz = Omagn.z;
-    magn = sqrt(sq(magx) + sq(magy) + sq(magz));
+    float home_magx = 160; 
+    float home_magy = -30; 
+    float home_magz = -620; 
+    float home_magn = 640;
+    float mag_threshold = 20;
 
-    d_magx = magx - home_magx;
-    d_magy = magy - home_magy;
-    d_magz = magz - home_magz;
-    d_magn = magn - home_magn;
+    //get magnetometer results
+    float magx= Omagn.x;
+    float magy = Omagn.y;
+    float magz = Omagn.z;
+    float magn = sqrt(sq(magx) + sq(magy) + sq(magz));
+
+    float d_magx = magx - home_magx;
+    float d_magy = magy - home_magy;
+    float d_magz = magz - home_magz;
+    float d_magn = magn - home_magn;
 
     /* Display the magnetometer results (magn is magnetometer in uTesla) */
     // Serial.print(d_magx); Serial.print(" ");
@@ -121,6 +124,25 @@ void loop(){
     // Serial.print(d_magn); Serial.print(" ");
 
   //GYROSCOPE!!
+
+    // Calculate accelerations (convert to g)
+    float accelx = Ogyro.x / 16384.0; // scale for ±2g
+    float accely = Ogyro.y / 16384.0;
+    float accelz = Ogyro.z / 16384.0;
+
+    // Convert to roll & pitch angles (degrees)
+    float roll  = atan2(accely, accelz) * 180 / PI; //tilt around x-axis
+    float pitch = atan2(-accelx, sqrt(accely * accely + accelz * accelz)) * 180 / PI; //tilt round y-axis
+
+    float angleTilt= max(abs(roll), abs(pitch));
+
+    if(angleTilt>=criticalAngle){
+      Serial.println(F("CRITICAL TILT WARNING"));
+    } else if(angleTilt>=warningAngle){
+      Serial.println(F("WARNING: TILT DETECTED"));  
+    } else{
+      Serial.println(F("Normal operation"));
+    }
 
     /* Display the gyroscope results (gyroscope data is in g) */
     // Serial.print("G ");
@@ -206,26 +228,39 @@ void recordBaseline() {
   collectSamples();
   runFFT();
 
+  int binsPerBand = (SAMPLES/2) / BANDS;
+
   //assign samples to the baseline spectrum matrix
-  for (int i = 0; i < SAMPLES/2; i++) {
-    baselineSpectrum[i] = vReal[i];
+  for (int b = 0; b < BANDS; b++) {
+    float sum = 0;
+    for (int i = b*binsPerBand; i < (b+1)*binsPerBand; i++) {
+      sum += vReal[i];
+    }
+    baselineSpectrum[b] = sum / binsPerBand; // average magnitude for this band
   }
+
   //say that baseline is now filled 
   baselineSet = true;
 }
 
 //compare live set of data to baseline
 double compareToBaseline() {
+  int binsPerBand = (SAMPLES/2) / BANDS;
   double diff = 0.0;
-
-  const int LOW_BIN = 0; //ignore low frequency bins
+ 
   //iterate through indices of live and baseline sets
-  for (int i = LOW_BIN; i < SAMPLES/2; i++) {
+  for (int b = 0; b < BANDS; b++) {
+    float sum = 0;
+    for (int i = b*binsPerBand; i < (b+1)*binsPerBand; i++) {
+      sum += vReal[i];
+    }
+    float liveAvg = sum / binsPerBand;
     //what is the difference between mag in each set?
-    double delta = vReal[i] - baselineSpectrum[i];
-    //add difference to overall difference. square penalizes larger differences more
+    float delta = liveAvg - baselineSpectrum[b];
+     //add difference to overall difference. square penalizes larger differences more
     diff += delta * delta;
   }
+
   return diff;
 }
 
