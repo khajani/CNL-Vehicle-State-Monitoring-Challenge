@@ -15,12 +15,12 @@ char pass[] = "1236393639";
 
 // ThingSpeak Channel and API Key
 unsigned long myChannelNumber = 3100192; // REPLACE with your final channel number
-const char * myWriteAPIKey = "NWU0RZBT5OC4183A"; // REPLACE with your final Write API Key
+const char * myWriteAPIKey = "NWU0RZBT5OC4183A"; // *** ThingSpeak Error: -301 often means a bad API key. Please double-check this key on your channel. ***
 
 // **MAG/GPS Configuration**
 const float DECLINATION_ANGLE = 12.5; // IMPORTANT: Set this for your location's magnetic variation!
-// *** CALIBRATION FIX: Updated baseline to match current readings (~2250.0) ***
-float home_magn = 0;    // Magnetometer baseline Norm (Used for deviation comparison)
+// Magnetic baseline Norm (Used for deviation comparison) - Initialized to 0.0, will be recorded by button press if needed.
+float home_magn = 0.0;    
 
 // -------------------- 3. GLOBAL SYSTEM & SENSOR DEFS & THRESHOLDS --------------------
 WiFiClient client;
@@ -52,10 +52,12 @@ const float criticalAngle = 80.0;
 
 // *** HAZARD LEVEL CHECK (HLC) THRESHOLDS (Used for determining state and additive score) ***
 // HARD CRITICAL ALERTS
-const float THRESH_RADIATION_CRITICAL = 1000.0;  // High IR reading -> Instant Score 10
-const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> Instant Score 10
+const float THRESH_RADIATION_CRITICAL = 1000.0;  // High IR reading -> Instant Score 10 (RAD_LEAK)
+const float THRESH_FIRE_CRITICAL      = 980.0;    // NEW: Confirmed Fire/Overheat -> Instant Score 10 (FIRE)
+const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> Instant Score 10 (CRASH)
+
 // WARNING ALERTS (used for additive scoring)
-const float THRESH_OVERHEAT_WARNING   = 950.0;   // In-box Temp/IR (Score +2)
+const float THRESH_OVERHEAT_WARNING   = 950.0;   // Possible Overheat/Fire (Score +2)
 const float THRESH_TILT_WARNING       = criticalAngle; // Score +1
 const double THRESH_FFT_WARNING       = 100000.0; // Score +1
 const float THRESH_MAG_DEVIATION      = 50.0;   // Score +1
@@ -66,17 +68,16 @@ const int THRESH_SCORE_CUMULATIVE_CRITICAL = 5; // Cumulative score of 5 or more
 
 // --- STATE CONSTANTS (Used INTERNALLY for LCD message lookup and Alarm type) ---
 const int STATE_INIT = 0;
-const int STATE_CRITICAL_CUMULATIVE = 1; // Cumulative score >= 5
-const int STATE_FIRE = 2;                
-const int STATE_CRASH = 3;               // Hard G-force detection
-const int STATE_WARNING = 4;             // Any cumulative score > 0 and < 5
+const int STATE_CRITICAL_CUMULATIVE = 1; // Cumulative score >= 5 (Critical)
+const int STATE_FIRE = 2;                // Hard Critical Fire Confirmed 
+const int STATE_CRASH = 3;               // Hard G-force detection (Critical)
+const int STATE_WARNING = 4;             // Any cumulative score > 0 and < 5 (Minor)
 const int STATE_NOMINAL = 5;             // All clear (Score 0)
-const int STATE_RAD_LEAK = 10;           // Hard radiation detection
+const int STATE_RAD_LEAK = 10;           // Hard radiation detection (Critical)
 
 
 // --- BUZZER AND TOUCH SENSORS ---
 #define BUZZER_PIN 8  // Digital pin for the buzzer (D8)
-// *** PIN FIX: Changing Touch Pin from D7 to D3 ***
 #define TOUCH_PIN 3   // Digital pin for the touch sensor (D3)
 #define BUTTON_PIN 6 // Digital pin for baseline re-record button
 
@@ -105,8 +106,8 @@ TestState states[] = {
   {"--INIT DONE--", "LOADING DECISIONS"}, 
   // Index 1: STATE_CRITICAL_CUMULATIVE 
   {"CRIT. WARNING", "PULL OVER, CALL"}, 
-  // Index 2: STATE_FIRE 
-  {"FIRE! CONTAIN!", "PULL OVER"},
+  // Index 2: STATE_FIRE (Confirmed Fire)
+  {"FIRE! CONFIRMED", "PULL OVER, CALL"},
   // Index 3: STATE_CRASH 
   {"CRASH! DANGER!", "STOP, CALL CNL"},
   // Index 4: STATE_WARNING (Generic minor warning)
@@ -119,7 +120,7 @@ TestState states[] = {
 
 int currentState = STATE_INIT;      // Starts in State 0 (Initializing)
 int hazardScore = 0;                // Value logged to Field 8 (0-6, or 10)
-const int flashRate = 200;          // milliseconds for the LCD flash cycle
+const int flashRate = 200;          // milliseconds for the LCD flash cycle (fast red flash)
 
 // --- NON-BLOCKING TIMER VARIABLES ---
 const unsigned long THINGSPEAK_INTERVAL_MS = 5000; // 5-second update interval
@@ -149,7 +150,7 @@ void collectSamples() {
   
   for (int i = 0; i < SAMPLES; i++) {
     unsigned long tStart = micros();
-    bmx160.getAllData(&Omagn, &Ogyro, &Oaccel); 
+    bmx160.getAllData(&Omagn, Ogyro, Oaccel); 
 
     // Use Z and Y axis for vibration samples
     vReal[i] = sqrt(
@@ -245,10 +246,13 @@ void setup() {
     lcd.setRGB(255, 0, 0); lcd.home(); lcd.print("BMX160 FAIL!");
     while(1);
   }
-
+  
   sBmx160SensorData_t Omagn, Ogyro, Oaccel;
+  // Initialize home_magn to a single reading to make initial state valid
   bmx160.getAllData(&Omagn, &Ogyro, &Oaccel);
-  home_magn = sqrt(sq(Omagn.x) + sq(Omagn.y)); 
+  // *** NOTE: home_magn calculation was removed as it's unsafe in a moving setup. 
+  // We leave it at 0.0, or you can uncomment the line below after static calibration.
+  // home_magn = sqrt(sq(Omagn.x) + sq(Omagn.y));
   Serial.println(F("BMX160 Initialized"));
   
   // LIS3MDL Init
@@ -313,8 +317,9 @@ void loop() {
 
   // 2. IMPACT / CRASH (ACCEL)
   float accel_raw_norm = sqrt(sq(Oaccel.x) + sq(Oaccel.y) + sq(Oaccel.z));
-  float gForce_in_G = accel_raw_norm;// / 16384.0; // Convert raw LSB to G's
-  float accel_x_in_G = Oaccel.x;// / 16384.0; 
+  // *** CRITICAL FIX: Divide by 16384.0 to convert raw LSB value to G's ***
+  float gForce_in_G = accel_raw_norm / 16384.0; 
+  float accel_x_in_G = Oaccel.x / 16384.0; 
 
   // 3. VIBRATION / INTEGRITY (FFT)
   collectSamples();
@@ -354,11 +359,16 @@ void loop() {
     currentState = STATE_CRASH;
     hazardScore = 10;
   } 
+  // NEW: Confirmed Fire Check (IR is above 980.0) -> Flashing Red
+  else if (ir_read >= THRESH_FIRE_CRITICAL) { 
+    currentState = STATE_FIRE;
+    hazardScore = 10;
+  }
   else {
     // 2. Calculate Additive Score for all remaining warnings (Minor/Major)
     int calculatedAdditiveScore = 0;
 
-    // Fire/Overheat (Score +2)
+    // Possible Fire/Overheat (Score +2) - This will lead to STATE_WARNING (Solid Yellow)
     if (ir_read >= THRESH_OVERHEAT_WARNING) { 
         calculatedAdditiveScore += 2; 
     }
@@ -391,12 +401,12 @@ void loop() {
     } 
     else if (calculatedAdditiveScore > 0) {
       // Minor warning(s) active (Score 1-4)
-      currentState = STATE_WARNING; 
+      currentState = STATE_WARNING; // Triggers SOLID YELLOW
       hazardScore = calculatedAdditiveScore;
     } 
     else {
       // All clear
-      currentState = STATE_NOMINAL;
+      currentState = STATE_NOMINAL; // Triggers SOLID GREEN
       hazardScore = 0;
     }
   }
@@ -408,27 +418,24 @@ void loop() {
   // Check for any Alert State (1, 2, 3, 4, 10)
   if (currentState != STATE_INIT && currentState != STATE_NOMINAL) { 
     
-    // --- LCD Flashing Logic (200ms cycle) ---
-    // Critical Alerts (1, 3, 10) flash RED/BLUE
-    if (currentState == STATE_CRITICAL_CUMULATIVE || currentState == STATE_CRASH || currentState == STATE_RAD_LEAK) {
+    // --- LCD Flashing/Color Logic ---
+    // CRITICAL Alerts (1, 2, 3, 10) flash RED/BLACK (Fast Red)
+    if (currentState == STATE_CRITICAL_CUMULATIVE || currentState == STATE_CRASH || currentState == STATE_RAD_LEAK || currentState == STATE_FIRE) {
         if (currentTime % flashRate < (flashRate / 2)) {  
             lcd.setRGB(255, 0, 0); // Red (Alert)
         } else {
-            lcd.setRGB(0, 150, 255); // Blue
+            lcd.setRGB(0, 0, 0); // Black (Off) for high-urgency flash (Fast flash effect)
         }
     } 
-    // Minor Alerts (4, 2) now flash YELLOW/BLACK (OFF)
-    else if (currentState == STATE_WARNING || currentState == STATE_FIRE) {
-         if (currentTime % flashRate < (flashRate / 2)) {  
-            lcd.setRGB(255, 255, 0); // Solid Yellow (Warning)
-        } else {
-            lcd.setRGB(0, 0, 0); // Black (Off) to make the flashing very clear.
-        }
+    // MINOR Alert (4) is now SOLID YELLOW
+    else if (currentState == STATE_WARNING) {
+        lcd.setRGB(255, 255, 0); // Solid Yellow (Warning)
     }
 
 
     // --- Buzzer Logic (SOS or short pulse) ---
-    if (currentState == STATE_CRITICAL_CUMULATIVE || currentState == STATE_CRASH || currentState == STATE_RAD_LEAK) {
+    // Critical states (1, 2, 3, 10) use SOS
+    if (currentState == STATE_CRITICAL_CUMULATIVE || currentState == STATE_CRASH || currentState == STATE_RAD_LEAK || currentState == STATE_FIRE) {
         // SOS Pattern Logic... 
         unsigned long t = currentTime - last_buzzer_ms;
         if (t >= MORSE_SOS_CYCLE_MS) {
@@ -441,7 +448,8 @@ void loop() {
             tone(BUZZER_PIN, BUZZ_FREQ); 
         } else { noTone(BUZZER_PIN); }
     } 
-    else if (currentState == STATE_WARNING || currentState == STATE_FIRE) {
+    // Minor state (4) uses short pulse
+    else if (currentState == STATE_WARNING) {
         // Single Short Buzz Pattern Logic... 
         unsigned long time_in_cycle = currentTime - last_buzzer_ms;
         if (time_in_cycle >= BUZZ_CYCLE_MS) {
@@ -454,8 +462,8 @@ void loop() {
   } 
   // Fixed GREEN for NOMINAL (State 5) - BUZZER OFF
   else if (currentState == STATE_NOMINAL || currentState == STATE_INIT) {
-    if (currentState == STATE_NOMINAL) lcd.setRGB(0, 255, 0); 
-    else lcd.setRGB(100, 100, 255); 
+    if (currentState == STATE_NOMINAL) lcd.setRGB(0, 255, 0); // Solid Green
+    else lcd.setRGB(100, 100, 255); // Blue for Init
     
     noTone(BUZZER_PIN);
     last_buzzer_ms = currentTime; 
