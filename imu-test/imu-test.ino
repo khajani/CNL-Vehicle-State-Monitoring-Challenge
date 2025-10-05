@@ -25,6 +25,7 @@
 #define ACCEL_THRESHOLD 1
 
 int IR_PIN = A0;
+int BUTTON_PIN = 7;
 
 //gyro variables
 const float warningAngle=50;
@@ -51,6 +52,7 @@ bool baselineSet = false; //indicates if theres a basline set stored
 void setup(){
   Serial.begin(115200);
   pinMode(LED_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT);
 
   //init the hardware bmx160  
   if (bmx160.begin() != true){
@@ -128,9 +130,9 @@ void loop(){
   //GYROSCOPE!!
 
     // Calculate accelerations (convert to g)
-    float gyrox = Ogyro.x / 16384.0; // scale for ±2g
-    float gyroy = Ogyro.y / 16384.0;
-    float gyroz = Ogyro.z / 16384.0;
+    float gyrox = Ogyro.x;// / 16384.0; // scale for ±2g
+    float gyroy = Ogyro.y;// / 16384.0;
+    float gyroz = Ogyro.z;// / 16384.0;
 
     // Convert to roll & pitch angles (degrees)
     float roll  = atan2(gyroy, gyroz) * 180 / PI; //tilt around x-axis
@@ -138,21 +140,22 @@ void loop(){
 
     float angleTilt= max(abs(roll), abs(pitch));
 
-    if(angleTilt>=criticalAngle){
-      Serial.println(F("CRITICAL TILT WARNING"));
-    } else if(angleTilt>=warningAngle){
-      Serial.println(F("WARNING: TILT DETECTED"));  
-    } else{
-      Serial.println(F("Normal operation"));
-    }
+    //Serial.println(angleTilt);
+
+    // if(angleTilt>=criticalAngle){
+    //   Serial.println(F("CRITICAL TILT WARNING"));
+    // } else if(angleTilt>=warningAngle){
+    //   Serial.println(F("WARNING: TILT DETECTED"));  
+    // } else{
+    //   Serial.println(F("Normal operation"));
+    // }
 
     /* Display the gyroscope results (gyroscope data is in g) */
-    // Serial.print("G ");
-    // Serial.print("X: "); Serial.print(Ogyro.x); Serial.print("  ");
-    // Serial.print("Y: "); Serial.print(Ogyro.y); Serial.print("  ");
-    // Serial.print("Z: "); Serial.print(Ogyro.z); Serial.print("  ");
-    // Serial.println("g");
+    // Serial.print(gyrox); Serial.print("  ");
+    // Serial.print(gyroy); Serial.print("  ");
+    // Serial.print(gyroz); Serial.print("  ");
   
+    
   //ACCELEROMETER!!
 
     //BASIC ACCEL (FOR COLLISONS)
@@ -167,6 +170,8 @@ void loop(){
         digitalWrite(LED_PIN, LOW);
       }
 
+      //Serial.println(acceln);
+
     //OVERCOMPLICATED ACCEL (FOR VIBRATIONS)
       collectSamples(); //get samples
       runFFT(); //translate samples
@@ -178,8 +183,8 @@ void loop(){
       static double smooth_diff = 0;  // remembers previous value
       smooth_diff = alpha * freq_diff + (1 - alpha) * smooth_diff;
 
-      Serial.print(" ");
-      Serial.println(freq_diff);
+      // Serial.print(" ");
+      // Serial.println(freq_diff);
 
       //basic LED test; will be replaced with LCD code later
       if (smooth_diff > FREQ_THRESHOLD) {
@@ -187,6 +192,8 @@ void loop(){
       } else {
         digitalWrite(LED_PIN, LOW);
       }
+
+      Serial.print(digitalRead(BUTTON_PIN));
 
     /* Display the accelerometer results (accelerometer data is in m/s^2) */
     // Serial.print(Oaccel.x); Serial.print(" ");
@@ -212,11 +219,12 @@ void collectSamples() {
 
     //set index in sample buffer to the norm accel reading
     vReal[i] = sqrt(
-      //(double)Oaccel.x*Oaccel.x +
+      (double)Oaccel.x*Oaccel.x +
       (double)Oaccel.y*Oaccel.y +
       (double)Oaccel.z*Oaccel.z);
 
     vImag[i] = 0.0; //set index in imaginary buffer to 0, will fill with all 0s
+
 
     //wait until next sample
     while (micros() - tStart < microsPerSample);
@@ -272,7 +280,7 @@ double compareToBaseline() {
     //what is the difference between mag in each set?
     float delta = liveAvg - baselineSpectrum[b];
      //add difference to overall difference. square penalizes larger differences more
-    diff += delta * delta;
+    diff += delta;// * delta;
   }
 
   return diff;
