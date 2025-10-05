@@ -197,6 +197,7 @@ void loop(){
       buttonState = digitalRead(BUTTON_PIN);
 
       if (buttonState == LOW && lastButtonState == HIGH) {
+        delay(4000);
         recordBaseline();
       }
 

@@ -59,8 +59,8 @@ const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> 
 // WARNING ALERTS (used for additive scoring)
 const float THRESH_OVERHEAT_WARNING   = 950.0;   // Possible Overheat/Fire (Score +2)
 const float THRESH_TILT_WARNING       = criticalAngle; // Score +1
-const double THRESH_FFT_WARNING       = 100000.0; // Score +1
-const float THRESH_MAG_DEVIATION      = 50.0;   // Score +1
+const double THRESH_FFT_WARNING       = 15; // Score +1
+const float THRESH_MAG_DEVIATION      = 150.0;   // Score +1
 const int THRESH_TOUCH_BREACH         = HIGH;   // Score +1
 
 // *** ADDITIVE SCORING THRESHOLD ***
@@ -150,7 +150,7 @@ void collectSamples() {
   
   for (int i = 0; i < SAMPLES; i++) {
     unsigned long tStart = micros();
-    bmx160.getAllData(&Omagn, Ogyro, Oaccel); 
+    bmx160.getAllData(&Omagn, &Ogyro, &Oaccel); 
 
     // Use Z and Y axis for vibration samples
     vReal[i] = sqrt(
@@ -252,7 +252,7 @@ void setup() {
   bmx160.getAllData(&Omagn, &Ogyro, &Oaccel);
   // *** NOTE: home_magn calculation was removed as it's unsafe in a moving setup. 
   // We leave it at 0.0, or you can uncomment the line below after static calibration.
-  // home_magn = sqrt(sq(Omagn.x) + sq(Omagn.y));
+  home_magn = sqrt(sq(Omagn.x) + sq(Omagn.y));
   Serial.println(F("BMX160 Initialized"));
   
   // LIS3MDL Init
@@ -267,6 +267,7 @@ void setup() {
   Serial.println(F("Baseline Recorded."));
   
   // Calibration Note
+
   Serial.print(F("Current Magnetic Baseline (home_magn) set to: "));
   Serial.println(home_magn);
 
