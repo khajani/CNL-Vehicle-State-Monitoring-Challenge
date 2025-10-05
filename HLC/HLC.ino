@@ -1,5 +1,5 @@
 #include <WiFiS3.h>      // REQUIRED for Arduino Uno R4 WiFi networking
-#include <ThingSpeak.h.h>  // REQUIRED for ThingSpeak functions
+#include <ThingSpeak.h>  // REQUIRED for ThingSpeak functions
 #include <Adafruit_LIS3MDL.h> // Magnetometer Library
 #include <Adafruit_Sensor.h>  // Unified Sensor Library
 #include <Wire.h>        // REQUIRED for I2C
@@ -49,7 +49,7 @@ float humidity = 0.0;      // Read locally, but not logged to ThingSpeak
 
 // FFT BUFFERS
 float vReal[SAMPLES];
-float vImag[SABLES];
+float vImag[SAMPLES];
 ArduinoFFT<float> FFT = ArduinoFFT<float>(vReal, vImag, SAMPLES, SAMPLE_FREQ);
 
 // BASELINE DATA
@@ -67,14 +67,14 @@ const float THRESH_FIRE_CRITICAL      = 850.0;    // Confirmed Fire/Overheat -> 
 const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> Instant Score 10 (CRASH)
 
 // WARNING ALERTS (used for additive scoring - Tier 1 point value)
-const float THRESH_IR_WARNING         = 800.0;   // Score +2 initially
+const float THRESH_IR_WARNING         = 939;   // Score +2 initially
 const float THRESH_TILT_WARNING       = criticalAngle; // Score +1 initially
 const double THRESH_FFT_WARNING       = 50.0; // Score +1 initially
 const float THRESH_MAG_DEVIATION      = 50.0;   // Score +1 initially
 const int THRESH_TOUCH_BREACH         = HIGH;   // Score +1 (Binary - only one tier)
 
 // NEW THRESHOLDS FOR TIERED SCORING (Tier 2: additive point value)
-const float THRESH_IR_SEVERE          = 825.0;  // ADDED: Additive +2 (Total +4)
+const float THRESH_IR_SEVERE          = 939;  // ADDED: Additive +2 (Total +4)
 const float THRESH_TILT_SEVERE        = 90.0;   // Additive +2 (Total +3)
 const double THRESH_FFT_SEVERE        = 450.0;  // Additive +2 (Total +3).
 const float THRESH_MAG_DEVIATION_SEVERE = 150.0;  // Additive +2 (Total +3)
@@ -169,7 +169,7 @@ void collectSamples() {
   for (int i = 0; i < SAMPLES; i++) {
     unsigned long tStart = micros();
     // NOTE: DFRobot library usage.
-    bmx160.getAllData(&Omagn, Ogyro, Oaccel); 
+    bmx160.getAllData(&Omagn, &Ogyro, &Oaccel); 
 
     // Use Z and Y axis for vibration samples
     vReal[i] = sqrt(

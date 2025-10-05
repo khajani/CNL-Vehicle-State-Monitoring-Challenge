@@ -291,6 +291,7 @@ double compareToBaseline() {
       sum += vReal[i];
     }
     float liveAvg = sum / binsPerBand;
+    //Serial.println(liveAvg);
     //what is the difference between mag in each set?
     float delta = liveAvg - baselineSpectrum[b];
      //add difference to overall difference. square penalizes larger differences more
