@@ -23,7 +23,7 @@ const char * myWriteAPIKey = "NWU0RZBT5OC4183A"; // *** ThingSpeak Error: -301 o
 // **MAG/GPS Configuration**
 const float DECLINATION_ANGLE = 12.5; // IMPORTANT: Set this for your location's magnetic variation!
 // Magnetic baseline Norm (Used for deviation comparison) - Initialized to 0.0, will be recorded by button press if needed.
-float home_magn = 0.0;    
+float home_magn = 0.0;     
 
 // -------------------- 3. GLOBAL SYSTEM & SENSOR DEFS & THRESHOLDS --------------------
 WiFiClient client;
@@ -31,8 +31,8 @@ int status = WL_IDLE_STATUS;
 
 // SENSOR OBJECTS
 DFRobot_BMX160 bmx160;
-rgb_lcd lcd;               
-Adafruit_LIS3MDL lis3mdl; 
+rgb_lcd lcd;                
+Adafruit_LIS3MDL lis3mdl;  
 
 // NEW: DHT SENSOR DEFINITION
 #define DHT_PIN 4
@@ -67,15 +67,15 @@ const float THRESH_FIRE_CRITICAL      = 850.0;    // Confirmed Fire/Overheat -> 
 const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> Instant Score 10 (CRASH)
 
 // WARNING ALERTS (used for additive scoring - Tier 1 point value)
-const float THRESH_IR_WARNING         = 939;   // Score +2 initially
+const float THRESH_IR_WARNING         = 30;    // Score +2 initially
 const float THRESH_TILT_WARNING       = criticalAngle; // Score +1 initially
 const double THRESH_FFT_WARNING       = 50.0; // Score +1 initially
-const float THRESH_MAG_DEVIATION      = 50.0;   // Score +1 initially
-const int THRESH_TOUCH_BREACH         = HIGH;   // Score +1 (Binary - only one tier)
+const float THRESH_MAG_DEVIATION      = 50.0;    // Score +1 initially
+const int THRESH_TOUCH_BREACH         = HIGH;    // Score +1 (Binary - only one tier)
 
 // NEW THRESHOLDS FOR TIERED SCORING (Tier 2: additive point value)
-const float THRESH_IR_SEVERE          = 939;  // ADDED: Additive +2 (Total +4)
-const float THRESH_TILT_SEVERE        = 90.0;   // Additive +2 (Total +3)
+const float THRESH_IR_SEVERE          = 30;  // ADJUSTED: Additive +1 (Total +3)
+const float THRESH_TILT_SEVERE        = 90.0;    // Additive +2 (Total +3)
 const double THRESH_FFT_SEVERE        = 450.0;  // Additive +2 (Total +3).
 const float THRESH_MAG_DEVIATION_SEVERE = 150.0;  // Additive +2 (Total +3)
 
@@ -87,10 +87,10 @@ const int THRESH_SCORE_MINOR_WARNING = 3;
 // --- STATE CONSTANTS (Used INTERNALLY for LCD message lookup and Alarm type) ---
 const int STATE_INIT = 0;
 const int STATE_CRITICAL_CUMULATIVE = 1; // Cumulative score >= 5 (Critical)
-const int STATE_FIRE = 2;                // Hard Critical Fire Confirmed 
-const int STATE_CRASH = 3;               // Hard G-force detection (Critical)
-const int STATE_WARNING = 4;             // Any cumulative score >= 3 and < 5 (Minor)
-const int STATE_NOMINAL = 5;             // All clear (Score 0, 1, or 2)
+const int STATE_FIRE = 2;              // Hard Critical Fire Confirmed 
+const int STATE_CRASH = 3;             // Hard G-force detection (Critical)
+const int STATE_WARNING = 4;           // Any cumulative score >= 3 and < 5 (Minor)
+const int STATE_NOMINAL = 5;           // All clear (Score 0, 1, or 2)
 const int STATE_RAD_LEAK = 10;           // Hard radiation detection (Critical)
 
 
@@ -114,16 +114,16 @@ const unsigned long BUZZ_CYCLE_MS = 500;
 
 // LCD STATE MAPPING (HLC States)
 struct TestState {
-  const char* anomaly;     // Anomaly type (MAX 16 CHARS)
+  const char* anomaly;      // Anomaly type (MAX 16 CHARS)
   const char* instruction; // Actionable instruction (MAX 16 CHARS)
 };
 
 // Array index must be continuous (0-6) for LCD lookup.
 TestState states[] = {
   // Index 0: STATE_INIT
-  {"--INIT DONE--", "LOADING DECISIONS"}, 
+  {"--INIT DONE--", "LOADING DECISION"}, // MODIFIED: Instruction is now 16 chars
   // Index 1: STATE_CRITICAL_CUMULATIVE 
-  {"CRIT. WARNING", "PULL OVER, CALL"}, 
+  {"CRIT. WARNING", "PULL OVER, CALL"},
   // Index 2: STATE_FIRE (Confirmed Fire)
   {"FIRE! CONFIRMED", "PULL OVER, CALL"},
   // Index 3: STATE_CRASH 
@@ -137,8 +137,8 @@ TestState states[] = {
 };
 
 int currentState = STATE_INIT;      // Starts in State 0 (Initializing)
-int hazardScore = 0;                // Value logged to Field 8 (0-6, or 10)
-const int flashRate = 200;          // milliseconds for the LCD flash cycle (fast red flash)
+int hazardScore = 0;             // Value logged to Field 8 (0-6, or 10)
+const int flashRate = 200;       // milliseconds for the LCD flash cycle (fast red flash)
 
 // --- NON-BLOCKING TIMER VARIABLES ---
 const unsigned long THINGSPEAK_INTERVAL_MS = 5000; // 5-second update interval
@@ -235,8 +235,19 @@ void connectToWiFi() {
   }
 
   while (status != WL_CONNECTED) {
-    lcd.setRGB(100, 100, 255); lcd.home(); lcd.print("CONNECTING WIFI");
-    lcd.setCursor(0, 1); lcd.print(ssid);
+    lcd.setRGB(100, 100, 255); 
+    lcd.home(); 
+    // Line 0: 16 characters for a clean overwrite
+    lcd.print("CONNECTING WIFI "); 
+    lcd.setCursor(0, 1); 
+    
+    // Line 1: Print SSID and explicitly pad with spaces 
+    // to ensure no garbage characters remain from previous states.
+    lcd.print(ssid);
+    for(int i = 0; i < 16 - strlen(ssid); i++) {
+        lcd.print(" ");
+    }
+    
     status = WiFi.begin(ssid, pass);
     delay(10000);
   }
@@ -282,7 +293,8 @@ void setup() {
   
   // RECORD BASELINE
   Serial.println(F("Recording FFT Baseline..."));
-  lcd.setRGB(255, 100, 0); lcd.home(); lcd.print("RECORD BASELINE");
+  lcd.setRGB(255, 100, 0); lcd.home(); lcd.print("RECORD BASELINE "); // 16 characters
+  lcd.setCursor(0, 1); lcd.print("FFT BASELINE    "); // 16 characters
   recordBaseline(); 
   Serial.println(F("Baseline Recorded."));
   
@@ -318,8 +330,8 @@ void loop() {
   // --- Check for Manual Baseline Re-record ---
   if (digitalRead(BUTTON_PIN) == HIGH) { 
       Serial.println(F("Button pressed! Re-recording baseline..."));
-      lcd.setRGB(255, 100, 0); lcd.home(); lcd.print("RE-RECORDING");
-      lcd.setCursor(0, 1); lcd.print("FFT BASELINE");
+      lcd.setRGB(255, 100, 0); lcd.home(); lcd.print("RE-RECORDING    "); // 16 characters
+      lcd.setCursor(0, 1); lcd.print("FFT BASELINE    "); // 16 characters
       recordBaseline();
       currentState = STATE_NOMINAL; 
       delay(2000); 
@@ -399,15 +411,16 @@ void loop() {
 
     Serial.println("\n--- Additive Score Breakdown ---");
 
-    // === TIER 1: IR Overheat/Fire (Score +2 OR +4 - Highly Additive) ===
+    // === TIER 1: IR Overheat/Fire (Score +2 OR +3 - Highly Additive) ===
     int ir_contribution = 0;
+    // Note: IR is unique; the base is +2 to reflect high importance/fire risk.
     if (ir_read >= THRESH_IR_WARNING) { 
         ir_contribution += 2; 
-        Serial.println("  [+2] IR Overheat/Fire Warning (IR >= 800.0) - Base Score");
+        Serial.print("  [+2] IR Overheat/Fire Warning (IR >= "); Serial.print(THRESH_IR_WARNING); Serial.println(") - Base Score");
     }
     if (ir_read >= THRESH_IR_SEVERE) { 
-        ir_contribution += 2; // Adds two more points for reaching severe level (825.0)
-        Serial.println("  [+2] IR Overheat/Fire (SEVERE: IR >= 825.0) - Additional Score (Total +4)");
+        ir_contribution += 1; // ADJUSTED: Adds one more point for reaching severe level (Total +3)
+        Serial.print("  [+1] IR Overheat/Fire (SEVERE: IR >= "); Serial.print(THRESH_IR_SEVERE); Serial.println(") - Additional Score (Total +3)");
     }
     calculatedAdditiveScore += ir_contribution;
     
@@ -415,11 +428,11 @@ void loop() {
     int tilt_contribution = 0;
     if (angleTilt >= THRESH_TILT_WARNING) {
         tilt_contribution += 1;
-        Serial.println("  [+1] Tilt/Load Shift Warning (Angle >= 80.0 deg)");
+        Serial.print("  [+1] Tilt/Load Shift Warning (Angle >= "); Serial.print(THRESH_TILT_WARNING); Serial.println(" deg)");
     }
     if (angleTilt >= THRESH_TILT_SEVERE) {
         tilt_contribution += 2; // Adds two more points for reaching severe level
-        Serial.println("  [+2] Tilt/Load Shift (SEVERE: Angle >= 90.0 deg) - Additional Score (Total +3)");
+        Serial.print("  [+2] Tilt/Load Shift (SEVERE: Angle >= "); Serial.print(THRESH_TILT_SEVERE); Serial.println(" deg) - Additional Score (Total +3)");
     }
     calculatedAdditiveScore += tilt_contribution;
 
@@ -428,11 +441,11 @@ void loop() {
     int fft_contribution = 0;
     if (smooth_diff >= THRESH_FFT_WARNING) { 
         fft_contribution += 1; 
-        Serial.println("  [+1] Vibration/Integrity Warning (FFT >= 50.0)");
+        Serial.print("  [+1] Vibration/Integrity Warning (FFT >= "); Serial.print(THRESH_FFT_WARNING); Serial.println(")");
     }
     if (smooth_diff >= THRESH_FFT_SEVERE) { 
         fft_contribution += 2; // Adds two more points for reaching severe level
-        Serial.println("  [+2] Vibration/Integrity (SEVERE: FFT >= 450.0) - Additional Score (Total +3)");
+        Serial.print("  [+2] Vibration/Integrity (SEVERE: FFT >= "); Serial.print(THRESH_FFT_SEVERE); Serial.println(") - Additional Score (Total +3)");
     }
     calculatedAdditiveScore += fft_contribution;
 
@@ -441,11 +454,11 @@ void loop() {
     int mag_contribution = 0;
     if (d_magn >= THRESH_MAG_DEVIATION) { 
         mag_contribution += 1; 
-        Serial.println("  [+1] Magnetic Deviation Warning (Mag Dev >= 50.0)");
+        Serial.print("  [+1] Magnetic Deviation Warning (Mag Dev >= "); Serial.print(THRESH_MAG_DEVIATION); Serial.println(")");
     }
     if (d_magn >= THRESH_MAG_DEVIATION_SEVERE) { 
         mag_contribution += 2; // Adds two more points for reaching severe level
-        Serial.println("  [+2] Magnetic Deviation (SEVERE: Mag Dev >= 150.0) - Additional Score (Total +3)");
+        Serial.print("  [+2] Magnetic Deviation (SEVERE: Mag Dev >= "); Serial.print(THRESH_MAG_DEVIATION_SEVERE); Serial.println(") - Additional Score (Total +3)");
     }
     calculatedAdditiveScore += mag_contribution;
 
@@ -489,7 +502,7 @@ void loop() {
     // --- LCD Flashing/Color Logic ---
     // CRITICAL Alerts (1, 2, 3, 10) flash RED/BLACK (Fast Red)
     if (currentState == STATE_CRITICAL_CUMULATIVE || currentState == STATE_CRASH || currentState == STATE_RAD_LEAK || currentState == STATE_FIRE) {
-        if (currentTime % flashRate < (flashRate / 2)) {  
+        if (currentTime % flashRate < (flashRate / 2)) { 
             lcd.setRGB(255, 0, 0); // Red (Alert)
         } else {
             lcd.setRGB(0, 0, 0); // Black (Off) for high-urgency flash (Fast flash effect)
@@ -568,13 +581,13 @@ void loop() {
   if (currentTime - lastThingSpeakTime >= THINGSPEAK_INTERVAL_MS) {
 
     // --- SET UP FIELDS ---
-    ThingSpeak.setField(1, ir_read);        
+    ThingSpeak.setField(1, ir_read);      
     ThingSpeak.setField(2, temperature_c);    // F2: Temperature ONLY
     ThingSpeak.setField(3, (float)smooth_diff); 
     ThingSpeak.setField(4, angleTilt);      
-    ThingSpeak.setField(5, gForce_in_G);      // F5: G-Force Norm (re-added for monitoring)
-    ThingSpeak.setField(6, true_heading);   
-    ThingSpeak.setField(7, d_magn);         
+    ThingSpeak.setField(5, gForce_in_G);     // F5: G-Force Norm (re-added for monitoring)
+    ThingSpeak.setField(6, true_heading);    
+    ThingSpeak.setField(7, d_magn);          
     ThingSpeak.setField(8, hazardScore);    
     
     // WRITE DATA TO THINGSPEAK
