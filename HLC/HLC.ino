@@ -51,7 +51,7 @@ const float criticalAngle = 80.0;
 
 // *** HAZARD LEVEL CHECK (HLC) THRESHOLDS (Used for determining state and additive score) ***
 // HARD CRITICAL ALERTS
-const float THRESH_RADIATION_CRITICAL = 900.0;  // High IR reading -> Instant Score 10
+const float THRESH_RADIATION_CRITICAL = 935.0;  // High IR reading -> Instant Score 10
 const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> Instant Score 10
 // WARNING ALERTS (used for additive scoring)
 const float THRESH_OVERHEAT_WARNING   = 80.0;   // In-box Temp/IR
@@ -334,7 +334,7 @@ void loop() {
   // -------------------- B & C. HAZARD SCORE & STATE DETERMINATION --------------------
   
   // 1. Check for HARD CRITICAL EVENTS (Highest Priority)
-  if (ir_read >= THRESH_RADIATION_CRITICAL) {
+  if (ir_read <= THRESH_RADIATION_CRITICAL) {
     currentState = STATE_RAD_LEAK; 
     hazardScore = 10;
   } 
