@@ -67,14 +67,17 @@ const float THRESH_FIRE_CRITICAL      = 850.0;    // Confirmed Fire/Overheat -> 
 const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> Instant Score 10 (CRASH)
 
 // WARNING ALERTS (used for additive scoring - Tier 1 point value)
-const float THRESH_IR_WARNING         = 27;    // Score +2 initially
+const float THRESH_IR_WARNING_LOW         = 20;    // Score +2 initially
+const float THRESH_IR_WARNING_HIGH         = 27;
 const float THRESH_TILT_WARNING       = criticalAngle; // Score +1 initially
 const double THRESH_FFT_WARNING       = 50.0; // Score +1 initially
 const float THRESH_MAG_DEVIATION      = 50.0;    // Score +1 initially
 const int THRESH_TOUCH_BREACH         = HIGH;    // Score +1 (Binary - only one tier)
 
 // NEW THRESHOLDS FOR TIERED SCORING (Tier 2: additive point value)
-const float THRESH_IR_SEVERE          = 29;  // ADJUSTED: Additive +1 (Total +3)
+const float THRESH_IR_SEVERE_LOW          = 28;  // ADJUSTED: Additive +1 (Total +3)
+const float THRESH_IR_SEVERE_HIGH          = 29;
+const float THRESH_IR_CRITICAL          = 30
 const float THRESH_TILT_SEVERE        = 90.0;    // Additive +2 (Total +3)
 const double THRESH_FFT_SEVERE        = 450.0;  // Additive +2 (Total +3).
 const float THRESH_MAG_DEVIATION_SEVERE = 250;  // Additive +2 (Total +3)
@@ -406,6 +409,21 @@ void loop() {
     currentState = STATE_FIRE;
     hazardScore = 10;
   }
+    
+  else if (ir_read >= THRESH_IR_SEVERE_LOW && ir_read <= THRESH_IR_SEVERE_HIGH) {
+    currentState = STATE_WARNING;  // You could also make a new STATE_SEVERE if you want
+    hazardScore = 5;               // Higher than normal warning
+  }
+  else if (ir_read >= THRESH_IR_WARNING_LOW && ir_read <= THRESH_IR_WARNING_HIGH) {
+    currentState = STATE_WARNING;
+    hazardScore = 3;               // Normal warning
+  }
+  else {
+    currentState = STATE_NOMINAL;  // Safe
+    hazardScore = 0;
+  }
+
+    
   else {
     // 2. Calculate Additive Score for all remaining warnings (Minor/Major)
     int calculatedAdditiveScore = 0;
