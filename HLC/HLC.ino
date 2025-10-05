@@ -15,11 +15,12 @@ char pass[] = "1236393639";
 
 // ThingSpeak Channel and API Key
 unsigned long myChannelNumber = 3100192; // REPLACE with your final channel number
-const char * myWriteAPIKey = "NWU0RZBT5OC4183A"; // REPLACE with your final Write API Key
+const char * myWriteAPIKey = "BAOHBAPAYCW24D6P"; // REPLACE with your final Write API Key
 
 // **MAG/GPS Configuration**
 const float DECLINATION_ANGLE = 12.5; // IMPORTANT: Set this for your location's magnetic variation!
-const float home_magn = 640.0;    // Magnetometer baseline Norm (Used for deviation comparison)
+// *** CALIBRATION FIX: Updated baseline to match current readings (~2250.0) ***
+const float home_magn = 2250.0;    // Magnetometer baseline Norm (Used for deviation comparison)
 
 // -------------------- 3. GLOBAL SYSTEM & SENSOR DEFS & THRESHOLDS --------------------
 WiFiClient client;
@@ -51,11 +52,9 @@ const float criticalAngle = 80.0;
 
 // *** HAZARD LEVEL CHECK (HLC) THRESHOLDS (Used for determining state and additive score) ***
 // HARD CRITICAL ALERTS
-// NOTE: RAISED to 1000.0 because the sensor baseline (940) was triggering the old 900.0 threshold.
 const float THRESH_RADIATION_CRITICAL = 1000.0;  // High IR reading -> Instant Score 10
 const float THRESH_G_FORCE_CRASH      = 3.0;    // 3.0G+ is a definite crash -> Instant Score 10
 // WARNING ALERTS (used for additive scoring)
-// NOTE: RAISED to 950.0 to prevent the new 940 baseline from constantly triggering the +2 score.
 const float THRESH_OVERHEAT_WARNING   = 950.0;   // In-box Temp/IR (Score +2)
 const float THRESH_TILT_WARNING       = criticalAngle; // Score +1
 const double THRESH_FFT_WARNING       = 100000.0; // Score +1
@@ -77,7 +76,8 @@ const int STATE_RAD_LEAK = 10;           // Hard radiation detection
 
 // --- BUZZER AND TOUCH SENSORS ---
 #define BUZZER_PIN 8  // Digital pin for the buzzer (D8)
-#define TOUCH_PIN 7   // Digital pin for the touch sensor (D7)
+// *** PIN FIX: Changing Touch Pin from D7 to D3 ***
+#define TOUCH_PIN 3   // Digital pin for the touch sensor (D3)
 #define BUTTON_PIN 6 // Digital pin for baseline re-record button
 
 // Morse Code Timing Constants (SOS Pattern for Critical Alerts)
@@ -257,6 +257,10 @@ void setup() {
   lcd.setRGB(255, 100, 0); lcd.home(); lcd.print("RECORD BASELINE");
   recordBaseline(); 
   Serial.println(F("Baseline Recorded."));
+  
+  // Calibration Note
+  Serial.print(F("Current Magnetic Baseline (home_magn) set to: "));
+  Serial.println(home_magn);
 
   // NETWORK INIT
   connectToWiFi();
@@ -338,8 +342,6 @@ void loop() {
   // -------------------- B & C. HAZARD SCORE & STATE DETERMINATION --------------------
   
   // 1. Check for HARD CRITICAL EVENTS (Highest Priority)
-  // This check MUST come first. The IR reading of 941 is high, so we raised the threshold
-  // to 1000 to treat 941 as the safe baseline.
   if (ir_read >= THRESH_RADIATION_CRITICAL) {
     currentState = STATE_RAD_LEAK; 
     hazardScore = 10;
@@ -353,7 +355,6 @@ void loop() {
     int calculatedAdditiveScore = 0;
 
     // Fire/Overheat (Score +2)
-    // Threshold is now 950.0. Since ir_read is 941.00, this should no longer trigger.
     if (ir_read >= THRESH_OVERHEAT_WARNING) { 
         calculatedAdditiveScore += 2; 
     }
@@ -369,7 +370,6 @@ void loop() {
     }
 
     // Mag Deviation (Security) (Score +1)
-    // NOTE: d_magn (2400+) is currently triggering this +1 score.
     if (d_magn >= THRESH_MAG_DEVIATION) { 
         calculatedAdditiveScore += 1; 
     }
@@ -405,27 +405,27 @@ void loop() {
   if (currentState != STATE_INIT && currentState != STATE_NOMINAL) { 
     
     // --- LCD Flashing Logic (200ms cycle) ---
-    // Critical Alerts (1, 3, 10) flash RED/CYAN
+    // Critical Alerts (1, 3, 10) flash RED/BLUE
     if (currentState == STATE_CRITICAL_CUMULATIVE || currentState == STATE_CRASH || currentState == STATE_RAD_LEAK) {
         if (currentTime % flashRate < (flashRate / 2)) {  
             lcd.setRGB(255, 0, 0); // Red (Alert)
         } else {
-            lcd.setRGB(0, 150, 255); // Cyan/Blue (Backlight always ON)
+            lcd.setRGB(0, 150, 255); // Blue
         }
     } 
-    // Minor Alerts (4, 2) flash YELLOW/CYAN
+    // Minor Alerts (4, 2) now flash YELLOW/BLACK (OFF)
     else if (currentState == STATE_WARNING || currentState == STATE_FIRE) {
          if (currentTime % flashRate < (flashRate / 2)) {  
-            lcd.setRGB(255, 255, 0); // Yellow (Warning)
+            lcd.setRGB(255, 255, 0); // Solid Yellow (Warning)
         } else {
-            lcd.setRGB(0, 150, 255); // Cyan/Blue (Backlight always ON)
+            lcd.setRGB(0, 0, 0); // Black (Off) to make the flashing very clear.
         }
     }
 
 
     // --- Buzzer Logic (SOS or short pulse) ---
     if (currentState == STATE_CRITICAL_CUMULATIVE || currentState == STATE_CRASH || currentState == STATE_RAD_LEAK) {
-        // SOS Pattern Logic... (Code unchanged for brevity)
+        // SOS Pattern Logic... 
         unsigned long t = currentTime - last_buzzer_ms;
         if (t >= MORSE_SOS_CYCLE_MS) {
             last_buzzer_ms = currentTime - (t % MORSE_SOS_CYCLE_MS);
@@ -438,7 +438,7 @@ void loop() {
         } else { noTone(BUZZER_PIN); }
     } 
     else if (currentState == STATE_WARNING || currentState == STATE_FIRE) {
-        // Single Short Buzz Pattern Logic... (Code unchanged for brevity)
+        // Single Short Buzz Pattern Logic... 
         unsigned long time_in_cycle = currentTime - last_buzzer_ms;
         if (time_in_cycle >= BUZZ_CYCLE_MS) {
           last_buzzer_ms = currentTime - (time_in_cycle % BUZZ_CYCLE_MS);
@@ -467,13 +467,16 @@ void loop() {
   int touch_value_debug = digitalRead(TOUCH_PIN); 
   Serial.println("\n--- Sensor Readings & State ---");
   Serial.print("Internal State: "); Serial.print(currentState); Serial.print(" -> "); Serial.println(current.anomaly);
-  Serial.print("Logged Hazard Score (F8): "); Serial.println(hazardScore); 
+  Serial.print("Logged Hazard Score (F8): "); Serial.print(hazardScore);
+  if (hazardScore > 0) Serial.println(" (CALIBRATE or CHECK WIRING!)");
+  else Serial.println(" (All Clear)");
+
   Serial.print("F1 (IR/Temp): "); Serial.println(ir_read);
   Serial.print("F2 (gForce Norm): "); Serial.println(gForce_in_G);
   Serial.print("F3 (FFT Score): "); Serial.println(smooth_diff);
   Serial.print("F4 (Tilt): "); Serial.println(angleTilt);
   Serial.print("F7 (Mag Dev): "); Serial.println(d_magn);
-  Serial.print("Touch State: "); Serial.println(touch_value_debug); 
+  Serial.print("Touch State (D3): "); Serial.println(touch_value_debug); 
 
 
   // -------------------- F. THINGSPEAK SEND (Runs every 5 seconds) --------------------
@@ -497,7 +500,6 @@ void loop() {
     } else {
       Serial.print("❌ Problem updating channel. HTTP error code: ");
       Serial.println(http_response_code);
-      // HTTP Error -401 means Unauthorized. This usually indicates an incorrect or revoked Write API Key.
     }
     
     // Reset the timer for the next 5-second interval
