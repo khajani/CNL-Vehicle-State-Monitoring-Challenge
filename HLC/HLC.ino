@@ -77,6 +77,7 @@ const int STATE_RAD_LEAK = 10;           // Hard radiation detection
 // --- BUZZER AND TOUCH SENSORS ---
 #define BUZZER_PIN 8  // Digital pin for the buzzer (D8)
 #define TOUCH_PIN 7   // Digital pin for the touch sensor (D7)
+#define BUTTON_PIN 6 // Digital pin for baseline re-record button
 
 // Morse Code Timing Constants (SOS Pattern for Critical Alerts)
 const int BUZZ_FREQ = 1800; // High-pitched, urgent frequency
@@ -195,7 +196,7 @@ double compareToBaseline() {
     }
     float liveAvg = sum / binsPerBand;
     float delta = liveAvg - baselineSpectrum[b];
-    diff += delta * delta;
+    diff += delta;// * delta;
   }
   return diff;
 }
@@ -227,6 +228,7 @@ void setup() {
   // Set up Buzzer and Touch Pins
   pinMode(BUZZER_PIN, OUTPUT);
   pinMode(TOUCH_PIN, INPUT);
+  pinMode(BUTTON_PIN, INPUT);
   
   // IMU INIT (BMX160)
   if (bmx160.begin() != true){
@@ -281,6 +283,7 @@ void loop() {
   collectSamples();
   runFFT(); 
   double freq_diff = compareToBaseline();
+  Serial.println(freq_diff);
   const float alpha = 0.2;
   static double smooth_diff = 0;
   smooth_diff = alpha * freq_diff + (1 - alpha) * smooth_diff; // FFT_SCORE
