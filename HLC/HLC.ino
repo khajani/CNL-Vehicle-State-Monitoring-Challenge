@@ -137,7 +137,6 @@ int getDisplayIndex(int hlcState) {
 }
 
 // -------------------- 5. FFT HELPER FUNCTIONS (Team Code) --------------------
-// (FFT functions omitted for brevity in this response, but kept in the file)
 void collectSamples() {
   unsigned long microsPerSample = 1000000UL / SAMPLE_FREQ;
   sBmx160SensorData_t Omagn, Ogyro, Oaccel;
@@ -196,7 +195,10 @@ double compareToBaseline() {
     }
     float liveAvg = sum / binsPerBand;
     float delta = liveAvg - baselineSpectrum[b];
-    diff += delta;// * delta;
+    // NOTE: Reverting this back to delta * delta (Sum of Squares)
+    // Sum of squares is the standard way to calculate spectral energy difference
+    // to prevent positive/negative deltas from cancelling out.
+    diff += delta * delta; 
   }
   return diff;
 }
@@ -225,10 +227,10 @@ void setup() {
   lcd.home(); lcd.print(states[STATE_INIT].anomaly);
   lcd.setCursor(0, 1); lcd.print(states[STATE_INIT].instruction);
   
-  // Set up Buzzer and Touch Pins
+  // Set up Buzzer, Touch, and Button Pins
   pinMode(BUZZER_PIN, OUTPUT);
   pinMode(TOUCH_PIN, INPUT);
-  pinMode(BUTTON_PIN, INPUT);
+  pinMode(BUTTON_PIN, INPUT); // Teammate's addition
   
   // IMU INIT (BMX160)
   if (bmx160.begin() != true){
@@ -253,6 +255,18 @@ void setup() {
   connectToWiFi();
   ThingSpeak.begin(client);
 
+  // --- IR SENSOR STABILIZATION FIX ---
+  // FIX: Perform 10 dummy analog reads to stabilize the sensor and the ADC
+  // and prevent an immediate false "RAD. LEAK!" alarm on boot.
+  Serial.println(F("Stabilizing IR Sensor..."));
+  for(int i = 0; i < 10; i++) {
+    analogRead(IR_PIN); 
+    delay(10); // Small delay between reads
+  }
+  Serial.print(F("Initial stabilized IR Reading: ")); 
+  Serial.println(analogRead(IR_PIN));
+  // ------------------------------------
+  
   currentState = STATE_NOMINAL; // Start in State 5 (Nominal) after successful setup
 }
 
@@ -262,6 +276,17 @@ void loop() {
   
   if (WiFi.status() != WL_CONNECTED) {
     connectToWiFi();
+  }
+
+  // --- Check for Manual Baseline Re-record ---
+  // Pressing the button will re-run the FFT baseline sequence
+  if (digitalRead(BUTTON_PIN) == HIGH) { 
+      Serial.println(F("Button pressed! Re-recording baseline..."));
+      lcd.setRGB(255, 100, 0); lcd.home(); lcd.print("RE-RECORDING");
+      lcd.setCursor(0, 1); lcd.print("FFT BASELINE");
+      recordBaseline();
+      currentState = STATE_NOMINAL; // Reset state after re-record
+      delay(2000); // Debounce and show message
   }
   
   // -------------------- A. SENSOR READS & PROCESSING --------------------
@@ -283,7 +308,6 @@ void loop() {
   collectSamples();
   runFFT(); 
   double freq_diff = compareToBaseline();
-  Serial.println(freq_diff);
   const float alpha = 0.2;
   static double smooth_diff = 0;
   smooth_diff = alpha * freq_diff + (1 - alpha) * smooth_diff; // FFT_SCORE
@@ -291,7 +315,6 @@ void loop() {
   // 4. MAGNETOMETER (SECURITY)
   float magx = Omagn.x;
   float magy = Omagn.y; 
-  // float magz = Omagn.z; // magz not used in deviation calculation
   float magn = sqrt(sq(magx) + sq(magy)); // Using 2D norm for deviation in transit is often sufficient
   float d_magn = abs(magn - home_magn); // Deviation score
   
@@ -374,10 +397,11 @@ void loop() {
   if (currentState != STATE_INIT && currentState != STATE_NOMINAL) { 
     
     // --- LCD Flashing Logic (200ms cycle) ---
+    // FIX: Backlight stays ON. Flashing between Red and Cyan (instead of Red and OFF).
     if (currentTime % flashRate < (flashRate / 2)) {  
-        lcd.setRGB(255, 0, 0); // Red
+        lcd.setRGB(255, 0, 0); // Red (Critical Alert)
     } else {
-        lcd.setRGB(0, 0, 0); // Off 
+        lcd.setRGB(0, 150, 255); // Cyan/Blue (Still ON, but less alarming color)
     }
 
     // --- Buzzer Logic ---
@@ -436,11 +460,9 @@ void loop() {
   // -------------------- E. THINGSPEAK SEND --------------------
   
   // --- SET UP FIELDS ---
-  // Individual sensor readings are logged so you can see the sequence of events.
   ThingSpeak.setField(1, ir_read);        // Field 1: IR/Radiation/Temp Analog Read (In-Box Temp)
   ThingSpeak.setField(2, gForce_in_G);    // Field 2: Total G-force (Impact, Norm of all axes)
-  // FIX: Cast 'double' smooth_diff to 'float' to resolve ThingSpeak ambiguity error.
-  ThingSpeak.setField(3, (float)smooth_diff);    // Field 3: FFT Vibration Score
+  ThingSpeak.setField(3, (float)smooth_diff);    // Field 3: FFT Vibration Score (Casting double to float fix)
   ThingSpeak.setField(4, angleTilt);      // Field 4: Tilt Angle (Load Shift)
   ThingSpeak.setField(5, accel_x_in_G);   // Field 5: X-Axis Acceleration (G's) - Front/Rear Impact Component
   ThingSpeak.setField(6, true_heading);   // Field 6: True Compass Heading (Degrees)
@@ -454,11 +476,8 @@ void loop() {
   Serial.print("F1 (IR/Temp): "); Serial.println(ir_read);
   Serial.print("F2 (gForce Norm): "); Serial.println(gForce_in_G);
   Serial.print("F3 (FFT Score): "); Serial.println(smooth_diff);
-  Serial.print("F4 (Tilt): "); Serial.println(angleTilt);
-  Serial.print("F5 (Accel X): "); Serial.println(accel_x_in_G);
-  Serial.print("F6 (True Heading): "); Serial.println(true_heading);
-  Serial.print("F7 (Mag Dev): "); Serial.println(d_magn);
-
+  Serial.print("Touch State: "); Serial.println(touch_value); // Added for debugging
+  
   // WRITE DATA TO THINGSPEAK
   int http_response_code = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
 
