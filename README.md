@@ -55,7 +55,7 @@ Sensor data is transmitted via WiFi to ThingSpeak for live data tracking and ana
 <img width="492" height="637" alt="image" src="https://github.com/user-attachments/assets/35c330b5-e3ba-469b-a4c7-cbcb01209c06" />
 
 
-🌐 Data Visualization
+## 🌐 Data Visualization
 
 All system data is transmitted to ThingSpeak, where it can be visualized in real time through charts showing:
 
@@ -66,7 +66,7 @@ All system data is transmitted to ThingSpeak, where it can be visualized in real
 
 🔗 Interface: https://thingspeak.mathworks.com/channels/3100192
 
- <img width="941" height="722" alt="image" src="https://github.com/user-attachments/assets/1b89552a-b46b-4d6c-8ae9-c7834bbda45e" />
+ <img width="470.5" height="361" alt="image" src="https://github.com/user-attachments/assets/1b89552a-b46b-4d6c-8ae9-c7834bbda45e" />
 
 ## 🔮 Future Improvements
 
