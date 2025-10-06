@@ -8,17 +8,17 @@
 // NEW: DHT Sensor Library
 #include <DHT.h>
 
-// Your Team's Libraries for Sensor Processing
+// Libraries for Sensor Processing
 #include <DFRobot_BMX160.h>
 #include <arduinoFFT.h>
 
-// -------------------- 2. YOUR PRIVATE CREDENTIALS --------------------
+// -------------------- 2. PRIVATE CREDENTIALS --------------------
 char ssid[] = "XXXX"; 
 char pass[] = "XXXXXXXX";
 
 // ThingSpeak Channel and API Key
-unsigned long myChannelNumber = 3100192; // REPLACE with your final channel number
-const char * myWriteAPIKey = "NWU0RZBT5OC4183Y"; // *** ThingSpeak Error: -301 often means a bad API key. Please double-check this key on your channel. ***
+unsigned long myChannelNumber = XXXXX; // 
+const char * myWriteAPIKey = "XXXXX"; // 
 
 // **MAG/GPS Configuration**
 const float DECLINATION_ANGLE = 12.5; // IMPORTANT: Set this for your location's magnetic variation!
