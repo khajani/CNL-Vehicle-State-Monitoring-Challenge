@@ -13,12 +13,12 @@
 #include <arduinoFFT.h>
 
 // -------------------- 2. YOUR PRIVATE CREDENTIALS --------------------
-char ssid[] = "KJ"; 
-char pass[] = "1236393639";
+char ssid[] = "XXXX"; 
+char pass[] = "XXXX";
 
 // ThingSpeak Channel and API Key
-unsigned long myChannelNumber = 3100192; // REPLACE with your final channel number
-const char * myWriteAPIKey = "NWU0RZBT5OC4183A"; // *** ThingSpeak Error: -301 often means a bad API key. Please double-check this key on your channel. ***
+unsigned long myChannelNumber = XXXXX; // REPLACE with your final channel number
+const char * myWriteAPIKey = "NWU0RZBT5OCXX"; // *** ThingSpeak Error: -301 often means a bad API key. Please double-check this key on your channel. ***
 
 // **MAG/GPS Configuration**
 const float DECLINATION_ANGLE = 12.5; // IMPORTANT: Set this for your location's magnetic variation!
