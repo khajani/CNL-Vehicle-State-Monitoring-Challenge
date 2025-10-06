@@ -2,6 +2,9 @@
 
 Telligence is an Arduino-based platform designed for real-time monitoring of vehicle and container conditions during nuclear waste transport. Built on the Arduino Uno R4 WiFi, it integrates multiple sensors to detect crashes, vibrations, temperature, humidity, and simulated radiation leaks to help ensure safety and environmental protection during high-risk transport operations.
 
+<img width="853" height="593" alt="image" src="https://github.com/user-attachments/assets/74eadc10-89ca-4df7-b54d-99b5b0909b9f" />
+
+
 ## 🚀 Features
 - 🧠 Hazard Level Check (HLC) System — Calculates safety status using sensors like accelerometer, magnetometer, & vibration data (IMU-based)    
 - ☢️ Radiation & Fire Detection — Detects abnormal IR readings indicating radiation leaks or fire hazards    
