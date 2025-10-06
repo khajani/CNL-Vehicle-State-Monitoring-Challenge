@@ -28,7 +28,10 @@ A weighted algorithm evaluates vibration intensity, tilt, and environmental read
 The LCD displays current state (Normal / Warning / Critical) with color coordination. The buzzer provides tiered audio feedback with an SOS alarm pattern for critical alerts.    
 
 5. Cloud Upload:    
-Sensor data is transmitted via WiFi to ThingSpeak for live data tracking and analysis.    
+Sensor data is transmitted via WiFi to ThingSpeak for live data tracking and analysis.
+
+<img width="891" height="474" alt="image" src="https://github.com/user-attachments/assets/eb1de686-5531-408e-927a-12c2d8bc403e" />
+
   
 ## 🧰 Hardware & Components    
 
@@ -48,6 +51,9 @@ Sensor data is transmitted via WiFi to ThingSpeak for live data tracking and ana
 - LCD: I²C communication for display output    
 - Buzzer: Digital output for alerts    
 - WiFi Telemetry: Built-in R4 WiFi module connects to ThingSpeak
+
+<img width="492" height="637" alt="image" src="https://github.com/user-attachments/assets/35c330b5-e3ba-469b-a4c7-cbcb01209c06" />
+
 
 🌐 Data Visualization
 
