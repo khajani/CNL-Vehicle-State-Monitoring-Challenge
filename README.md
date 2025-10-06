@@ -1,4 +1,4 @@
-# 🚛 Canadian Nuclear Laboratories - Vehicle State Monitoring Challenge
+# 🚛 Canadian Nuclear Laboratories - Vehicle State Monitoring Challenge (Telligence)
 
 Telligence is an Arduino-based platform designed for real-time monitoring of vehicle and container conditions during nuclear waste transport. Built on the Arduino Uno R4 WiFi, it integrates multiple sensors to detect crashes, vibrations, temperature, humidity, and simulated radiation leaks to help ensure safety and environmental protection during high-risk transport operations.
 
