@@ -31,12 +31,30 @@ Sensor data is transmitted via WiFi to ThingSpeak for live data tracking and ana
 
 - Arduino Uno R4 WiFi
 - Grove IMU (Accelerometer, Gyroscope, Magnetometer)    
-- DHT22 Temperature & Humidity Sensor    
+- AHT22 Temperature & Humidity Sensor    
 - IR Sensor and Emitter (Radiation Simulation)    
 - LCD Display    
-- Piezo Buzzer    
-- Breadboard, Wires, Resistors, Power Supply    
+- Buzzer    
+- Breadboard, Wires, Resistors, Power Supply
 
-- https://thingspeak.mathworks.com/channels/3100192
+##🔌 Circuit Overview
 
- <img width="1882" height="1244" alt="image" src="https://github.com/user-attachments/assets/1b89552a-b46b-4d6c-8ae9-c7834bbda45e" />
+- IMU: SDA/SCL → I²C pins on Arduino    
+- DHT22: Signal → Digital pin      
+- IR Sensor: Analog input for radiation/fire detection    
+- LCD: I²C communication for display output    
+- Buzzer: Digital output for alerts    
+- WiFi Telemetry: Built-in R4 WiFi module connects to ThingSpeak
+
+🌐 Data Visualization
+
+All system data is transmitted to ThingSpeak, where it can be visualized in real time through charts showing:
+
+- Vibration magnitude
+- Temperature & humidity trends
+- Radiation detection states
+- System status over time
+
+🔗 Interface: https://thingspeak.mathworks.com/channels/3100192
+
+ <img width="941" height="722" alt="image" src="https://github.com/user-attachments/assets/1b89552a-b46b-4d6c-8ae9-c7834bbda45e" />
