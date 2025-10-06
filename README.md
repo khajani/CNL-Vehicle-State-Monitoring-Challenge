@@ -43,7 +43,7 @@ Sensor data is transmitted via WiFi to ThingSpeak for live data tracking and ana
 - Buzzer    
 - Breadboard, Wires, Resistors, Power Supply
 
-##🔌 Circuit Overview
+## 🔌 Circuit Overview
 
 - IMU: SDA/SCL → I²C pins on Arduino    
 - DHT22: Signal → Digital pin      
